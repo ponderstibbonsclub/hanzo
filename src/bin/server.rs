@@ -5,8 +5,6 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
-use std::thread::sleep;
-use std::time::Duration;
 
 // Dedicated worker thread for sending and receiving game state with a
 // particular client
@@ -50,16 +48,17 @@ fn main() -> std::io::Result<()> {
     simple_logging::log_to_stderr(LevelFilter::Info);
 
     // Generate map procedurally...
-    let map = Map(vec![Tile::Floor; GRID_SIZE * GRID_SIZE]);
+    let map = Map::default();
+    let mut server = Server { map };
 
-    let listener = TcpListener::bind("127.0.0.1:50000")?;
+    let listener = TcpListener::bind(cli.address)?;
     let mut handles = Vec::new();
     let mut channels = Vec::new();
 
     // Spawn new thread for each player connection
     for _ in 0..cli.players {
         let stream = listener.accept()?.0;
-        let thread_map = map.clone();
+        let thread_map = server.map.clone();
 
         // Create channels for communicating with client threads
         let (tx0, rx0): (Sender<ToClient>, Receiver<ToClient>) = mpsc::channel();
@@ -90,17 +89,14 @@ fn main() -> std::io::Result<()> {
         }
 
         if let Ok(msg) = channels[current].1.recv() {
-            // Current player's turn: do something here
-            info!("Turn for player {}: {:?}", current, msg);
+            server.update(&msg);
         } else {
             break;
         }
 
         current += 1;
         if current == cli.players {
-            // Server player's turn: do something here
-            info!("Turn for defender");
-            sleep(Duration::from_millis(300));
+            server.turn();
             current = 0;
         }
     }
