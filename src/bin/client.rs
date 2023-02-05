@@ -1,8 +1,10 @@
 use clap::Parser;
 use hanzo::*;
 
-fn main() -> Result<()> {
+fn main() {
     let cli = ClientCli::parse();
-
-    Client::new(&cli.address)?.run()
+    Terminal::new()
+        .and_then(|ui| Client::new(&cli.address, ui))
+        .and_then(|mut client| client.run())
+        .unwrap_or_else(|err| eprintln!("Something went wrong: \"{}\"", err));
 }

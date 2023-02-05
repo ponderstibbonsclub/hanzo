@@ -1,4 +1,4 @@
-use crate::{Game, Point, Result};
+use crate::{Game, Point, Result, UserInterface};
 use bincode::{deserialize_from, serialize_into};
 use log::{info, LevelFilter};
 use serde::{Deserialize, Serialize};
@@ -109,8 +109,10 @@ impl Server {
 
         let mut clients = Vec::with_capacity(game.players);
         let listener = TcpListener::bind(&game.address)?;
-        for _ in 0..game.players {
-            clients.push(ClientHandle::new(&listener, game.clone())?);
+        for i in 0..game.players {
+            let mut g = game.clone();
+            g.pos = g.positions[i];
+            clients.push(ClientHandle::new(&listener, g)?);
         }
 
         Ok(Server { clients, game })
@@ -133,7 +135,7 @@ impl Server {
             // Receive update from current player's client
             let msg = self.clients[current].rx.recv()?;
             info!("Received update from player {}", current);
-            self.game.update(msg);
+            self.game.update(msg, current);
 
             current = (current + 1) % self.game.players;
         }
@@ -147,13 +149,14 @@ impl Server {
 }
 
 /// A player client
-pub struct Client {
+pub struct Client<T: UserInterface> {
     stream: TcpStream,
     game: Game,
+    ui: T,
 }
 
-impl Client {
-    pub fn new(address: &str) -> Result<Self> {
+impl<T: UserInterface> Client<T> {
+    pub fn new(address: &str, ui: T) -> Result<Self> {
         log_to_stderr(LevelFilter::Info);
         //log_to_file("hanzo.log", LevelFilter::Error)?;
 
@@ -161,28 +164,25 @@ impl Client {
         let game = deserialize_from(&stream)?;
         info!("Connected to {}. Waiting for server...", address);
 
-        Ok(Client { stream, game })
+        Ok(Client { stream, game, ui })
     }
 
-    pub fn run(&self) -> Result<()> {
+    pub fn run(&mut self) -> Result<()> {
         loop {
             // Receive update from server
-            let msg = deserialize_from(&self.stream)?;
-            self.game.display(&msg);
+            let msg: MsgToClient = deserialize_from(&self.stream)?;
+            self.ui.display(&self.game, msg.defender)?;
             if msg.quit {
                 break;
             }
 
             // Send back update if it's our turn
             if msg.turn {
-                let msg = if msg.defender {
-                    self.game.defender()
-                } else {
-                    self.game.player()
-                };
+                let msg = self.game.play(msg.defender, &mut self.ui)?;
                 serialize_into(&self.stream, &msg)?;
             }
         }
+        self.ui.reset();
 
         Ok(())
     }
