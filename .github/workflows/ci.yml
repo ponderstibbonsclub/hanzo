@@ -82,7 +82,9 @@ jobs:
         title: v${{ steps.version.outputs.version }}-${{ steps.version.outputs.sha }}
         draft: true
         prerelease: false
-        files: target/release/hanzo
+        files: |
+          target/release/client
+          target/release/server
   
   rel-win:
     name: Windows Release
@@ -107,13 +109,13 @@ jobs:
           ~/.cargo/git/db/
         key: ${{ runner.os }}-rustc-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/ci.yml') }}
     - name: Build for Windows
-      run: cargo build --release
+      run: cargo build --release --bin client
     - name: Upload Windows Binary
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ needs.rel.outputs.upload_url }}
-        asset_path: ${{ github.workspace }}/target/release/hanzo.exe
+        asset_path: ${{ github.workspace }}/target/release/client.exe
         asset_name: hanzo.exe
         asset_content_type: application/octet-stream
