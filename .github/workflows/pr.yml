@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Setup Toolchain
+      id: toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: "clippy, rustfmt"
+    - name: Cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          target/
+          # https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: ${{ runner.os }}-rustc-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/ci.yml', '.github/workflows/pr.yml') }}
+    - name: Format
+      run: cargo fmt --all -- --check
+    - name: Clippy
+      if: success() || failure()
+      run: cargo clippy -- -D warnings
+    - name: Test
+      if: success() || failure()
+      run: cargo test

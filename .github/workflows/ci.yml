@@ -30,7 +30,7 @@ jobs:
           ~/.cargo/registry/index/
           ~/.cargo/registry/cache/
           ~/.cargo/git/db/
-        key: ${{ runner.os }}-rustc-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/ci.yml') }}
+        key: ${{ runner.os }}-rustc-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/ci.yml', '.github/workflows/pr.yml') }}
     - name: Format
       run: cargo fmt --all -- --check
     - name: Clippy
