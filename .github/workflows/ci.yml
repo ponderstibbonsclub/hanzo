@@ -69,7 +69,7 @@ jobs:
     - name: Version
       id: version
       run: |
-        echo "version=$(cargo metadata --format-version 1 | jq --raw-output '.packages[] | select(.name==\"hanzo\") | .version')" >> $GITHUB_OUTPUT
+        echo "version=$(cargo metadata --format-version 1 | jq --raw-output '.packages[] | select(.name=="hanzo") | .version')" >> $GITHUB_OUTPUT
         echo "sha=$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_OUTPUT
     - name: Build
       run: cargo build --release
