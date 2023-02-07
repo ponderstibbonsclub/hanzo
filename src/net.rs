@@ -2,7 +2,7 @@ use crate::{Game, Point, Result, UserInterface};
 use bincode::{deserialize_from, serialize_into};
 use log::{info, LevelFilter};
 use serde::{Deserialize, Serialize};
-use simple_logging::{log_to_file, log_to_stderr};
+use simple_logging::log_to_stderr;
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread::{spawn, JoinHandle};
