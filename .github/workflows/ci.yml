@@ -18,6 +18,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
     - name: Setup Toolchain
+      id: toolchain
       uses: dtolnay/rust-toolchain@stable
       with:
         components: "clippy, rustfmt"
@@ -52,6 +53,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
     - name: Setup Toolchain
+      id: toolchain
       uses: dtolnay/rust-toolchain@stable
     - name: Cache
       uses: actions/cache@v3
