@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Setup Toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: "clippy, rustfmt"
+    - name: Cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          target/
+          # https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: ${{ runner.os }}-rustc-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/ci.yml') }}
+    - name: Format
+      run: cargo fmt --all -- --check
+    - name: Clippy
+      if: success() || failure()
+      run: cargo clippy -- -D warnings
+    - name: Test
+      if: success() || failure()
+      run: cargo test
+  
+  rel:
+    name: Create Release
+    needs: ["check"]
+    runs-on: ubuntu-22.04
+    outputs: 
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Setup Toolchain
+      uses: dtolnay/rust-toolchain@stable
+    - name: Cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          target/
+          # https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: ${{ runner.os }}-rustc-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/ci.yml') }}
+    - name: Version
+      id: version
+      run: |
+        echo "version=$(cargo metadata --format-version 1 | jq --raw-output '.packages[] | select(.name==\"hanzo\") | .version')" >> $GITHUB_OUTPUT
+        echo "sha=$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_OUTPUT
+    - name: Build
+      run: cargo build --release
+    - name: Create Release
+      id: create_release
+      uses: marvinpinto/action-automatic-releases@latest
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        automatic_release_tag: ${{ steps.version.outputs.version }}-${{ steps.version.outputs.sha }}
+        title: v${{ steps.version.outputs.version }}-${{ steps.version.outputs.sha }}
+        draft: true
+        prerelease: false
+        files: target/release/hanzo
+  
+  rel-win:
+    name: Windows Release
+    needs: ["rel"]
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Setup Toolchain
+      id: toolchain
+      uses: dtolnay/rust-toolchain@stable
+    - name: Cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          target/
+          # https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: ${{ runner.os }}-rustc-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/ci.yml') }}
+    - name: Build for Windows
+      run: cargo build --release
+    - name: Upload Windows Binary
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.rel.outputs.upload_url }}
+        asset_path: ${{ github.workspace }}/target/release/hanzo.exe
+        asset_name: hanzo.exe
+        asset_content_type: application/octet-stream
