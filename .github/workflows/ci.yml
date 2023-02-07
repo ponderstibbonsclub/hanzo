@@ -3,8 +3,6 @@ name: CI
 on:
   push:
     branches: ["main"]
-  pull_request:
-    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -46,8 +44,6 @@ jobs:
     name: Create Release
     needs: ["check"]
     runs-on: ubuntu-22.04
-    outputs: 
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
     
     steps:
     - name: Checkout
@@ -55,6 +51,12 @@ jobs:
     - name: Setup Toolchain
       id: toolchain
       uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: x86_64-pc-windows-gnu
+    - name: Install Windows Cross Tools
+      run: |
+        sudo apt update
+        sudo apt install gcc-mingw-w64-x86-64-win32
     - name: Cache
       uses: actions/cache@v3
       with:
@@ -73,6 +75,8 @@ jobs:
         echo "sha=$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_OUTPUT
     - name: Build
       run: cargo build --release
+    - name: Build for Windows
+      run: cargo build --release --bin client --target x86_64-pc-windows-gnu --config target.x86_64-pc-windows-gnu.linker=\"x86_64-w64-mingw32-gcc-win32\" --config target.x86_64-pc-windows-gnu.ar=\"x86_64-w64-mingw32-ar-win32\"
     - name: Create Release
       id: create_release
       uses: marvinpinto/action-automatic-releases@latest
@@ -85,37 +89,4 @@ jobs:
         files: |
           target/release/client
           target/release/server
-  
-  rel-win:
-    name: Windows Release
-    needs: ["rel"]
-    runs-on: windows-latest
-
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v3
-    - name: Setup Toolchain
-      id: toolchain
-      uses: dtolnay/rust-toolchain@stable
-    - name: Cache
-      uses: actions/cache@v3
-      with:
-        path: |
-          target/
-          # https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-        key: ${{ runner.os }}-rustc-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/ci.yml') }}
-    - name: Build for Windows
-      run: cargo build --release --bin client
-    - name: Upload Windows Binary
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.rel.outputs.upload_url }}
-        asset_path: ${{ github.workspace }}/target/release/client.exe
-        asset_name: hanzo.exe
-        asset_content_type: application/octet-stream
+          target/x86_64-pc-windows-gnu/release/client.exe
