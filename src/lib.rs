@@ -14,16 +14,12 @@ pub struct ServerCli {
     /// IP address of server
     pub address: String,
     /// Number of players
-    #[arg(default_value_t = 4)]
     pub players: usize,
     /// Number of guards
-    #[arg(default_value_t = 5)]
     pub guards: usize,
-    #[arg(default_value_t = 48)]
     /// Length of side of map
     pub len: usize,
     /// Turn time (minutes)
-    #[arg(default_value_t = 2)]
     pub timer: u8,
 }
 
