@@ -213,6 +213,7 @@ impl UserInterface for Terminal {
     fn input(&mut self, game: &mut Game, defender: bool) -> Result<()> {
         let timer = Instant::now();
 
+        let mut detected: isize = 3;
         let mut actions: isize = ACTIONS;
         while actions > 0 {
             if let Some(remaining) = game.timer.checked_sub(timer.elapsed()) {
@@ -241,6 +242,25 @@ impl UserInterface for Terminal {
                 }
             } else {
                 continue;
+            }
+
+            // Check for guard elimination
+            for guard in game.guards.iter_mut() {
+                if let Some(pos) = game.pos {
+                    if let Some((guard_pos, _)) = guard {
+                        if *guard_pos == pos {
+                            *guard = None;
+                        }
+                    }
+                }
+            }
+
+            // Check for attacker elimination
+            if game.visible() {
+                detected -= 1;
+            }
+            if detected == 0 {
+                game.pos = None;
             }
 
             self.display(game, defender)?;
