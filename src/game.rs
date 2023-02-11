@@ -1,4 +1,4 @@
-use crate::{MsgToClient, MsgToServer, Result, ServerCli, UserInterface};
+use crate::{defaults, MsgToClient, MsgToServer, Result, ServerCli, UserInterface};
 use rand::{
     distributions::{Distribution, Standard},
     random, Rng,
@@ -18,6 +18,15 @@ impl fmt::Display for Tile {
         match self {
             Tile::Floor => write!(f, "."),
             Tile::Wall => write!(f, "#"),
+        }
+    }
+}
+
+impl From<char> for Tile {
+    fn from(c: char) -> Tile {
+        match c {
+            '#' => Tile::Wall,
+            _ => Tile::Floor,
         }
     }
 }
@@ -81,6 +90,19 @@ impl Map {
     }
 }
 
+impl From<&str> for Map {
+    fn from(map: &str) -> Map {
+        // quick and dirty, use at your peril
+        let buf: Vec<Tile> = map
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .map(|c| c.into())
+            .collect();
+        let len: usize = (buf.len() as f64).sqrt().floor() as usize;
+        Map { len, buf }
+    }
+}
+
 pub type Point = (u8, u8);
 
 /// Iterator over Map's Tiles
@@ -138,19 +160,32 @@ pub struct Game {
 
 impl Game {
     pub fn new(cli: ServerCli) -> Self {
-        let map = Map::new(cli.len);
         let address = cli.address;
-        let players = cli.players;
         let timer = Duration::from_secs((cli.timer * 60).into());
-
         let pos = None;
-        let mut positions: Vec<Option<Point>> =
-            (0..cli.players).map(|_| Some(map.random())).collect();
-        let defender = random::<usize>() % cli.players;
-        positions[defender] = None;
-        let guards: Vec<Option<(Point, Direction)>> = (0..cli.guards)
-            .map(|_| Some((map.random(), random::<Direction>())))
-            .collect();
+
+        let players: usize;
+        let map: Map;
+        let mut positions: Vec<Option<Point>>;
+        let guards: Vec<Option<(Point, Direction)>>;
+        let defender: usize;
+        if cli.test.is_some() {
+            players = defaults::PLAYERS;
+            defender = defaults::DEFENDER;
+            map = defaults::MAP.into();
+            positions = defaults::POSITIONS.to_vec();
+            guards = defaults::GUARDS.to_vec();
+        } else {
+            // TODO: better procedural generation
+            players = cli.players;
+            map = Map::new(cli.len);
+            positions = (0..cli.players).map(|_| Some(map.random())).collect();
+            defender = random::<usize>() % cli.players;
+            positions[defender] = None;
+            guards = (0..cli.guards)
+                .map(|_| Some((map.random(), random::<Direction>())))
+                .collect();
+        }
 
         Game {
             address,

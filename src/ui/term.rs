@@ -10,8 +10,8 @@ use std::io::{self, Stdout, Write};
 use std::ops::Drop;
 use std::time::{Duration, Instant};
 
-const TIMEOUT: u64 = 100;
-const ACTIONS: isize = 3;
+const TIMEOUT: u64 = 200;
+const ACTIONS: isize = 5;
 
 pub struct Terminal {
     stdout: Stdout,

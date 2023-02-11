@@ -1,3 +1,4 @@
+pub mod defaults;
 mod game;
 mod net;
 mod ui;
@@ -21,6 +22,8 @@ pub struct ServerCli {
     pub len: usize,
     /// Turn time (minutes)
     pub timer: u8,
+    /// Test settings
+    pub test: Option<bool>,
 }
 
 #[derive(Parser)]
