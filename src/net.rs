@@ -1,4 +1,4 @@
-use crate::{Direction, Game, Point, Result, UserInterface};
+use crate::{Direction, Game, Point, Result, Status, UserInterface};
 use bincode::{deserialize_from, serialize_into};
 use log::{info, LevelFilter};
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ pub struct MsgToClient {
     // Guards' positions (if alive)
     pub guards: Vec<Option<(Point, Direction)>>,
     // Game finished?
-    pub quit: bool,
+    pub quit: Status,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -30,7 +30,7 @@ pub struct MsgToServer {
     // New positions of guards
     pub guards: Vec<Option<(Point, Direction)>>,
     // Game finished?
-    pub quit: bool,
+    pub quit: Status,
 }
 
 /// A client connection
@@ -51,7 +51,7 @@ impl ClientThread {
             // Send latest info to client
             let msg = self.rx.recv()?;
             serialize_into(&self.stream, &msg)?;
-            if msg.quit {
+            if msg.quit != Status::Running {
                 break;
             }
 
@@ -111,6 +111,7 @@ impl Server {
         let listener = TcpListener::bind(&game.address)?;
         for i in 0..game.players {
             let mut g = game.clone();
+            g.player = i;
             g.pos = g.positions[i];
             clients.push(ClientHandle::new(&listener, g)?);
         }
@@ -121,6 +122,9 @@ impl Server {
     pub fn run(&mut self) -> Result<()> {
         let mut current: usize = 0;
         loop {
+            // Check victory conditions
+            self.game.victory();
+
             // Send updates to clients
             for (i, client) in self.clients.iter().enumerate() {
                 let msg = self.game.turn(i, current);
@@ -128,7 +132,7 @@ impl Server {
             }
             info!("Update broadcasted to clients");
 
-            if self.game.quit {
+            if self.game.quit != Status::Running {
                 break;
             }
 
@@ -168,11 +172,13 @@ impl<T: UserInterface> Client<T> {
     }
 
     pub fn run(&mut self) -> Result<()> {
+        let quit: Status;
         loop {
             // Receive update from server
             let msg: MsgToClient = deserialize_from(&self.stream)?;
             self.ui.display(&self.game, msg.defender)?;
-            if msg.quit {
+            if msg.quit != Status::Running {
+                quit = msg.quit;
                 break;
             }
 
@@ -183,6 +189,12 @@ impl<T: UserInterface> Client<T> {
             }
         }
         self.ui.reset();
+
+        if quit != Status::Quit {
+            println!("\n\nCongratulations! You win.\n");
+        } else {
+            println!("\n\nGame over! Thanks for playing.\n");
+        }
 
         Ok(())
     }

@@ -1,4 +1,4 @@
-use crate::{Game, Point, Result, UserInterface};
+use crate::{Game, Point, Result, Status, UserInterface};
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
     event::{poll, read, Event, KeyCode},
@@ -51,7 +51,7 @@ impl Terminal {
             KeyCode::Down => game.move_guard(self.guard, 0, 1),
             KeyCode::Char(c) => match c {
                 'q' => {
-                    game.quit = true;
+                    game.quit = Status::Quit;
                     return ACTIONS;
                 }
                 '[' => game.rotate_guard(self.guard, false),
@@ -72,7 +72,7 @@ impl Terminal {
             KeyCode::Down => game.move_player(0, 1),
             KeyCode::Char(c) => match c {
                 'q' => {
-                    game.quit = true;
+                    game.quit = Status::Quit;
                     return ACTIONS;
                 }
                 '.' => (),
@@ -184,6 +184,15 @@ impl UserInterface for Terminal {
             }
         }
 
+        // Display player's target
+        if !defender {
+            if let Some(pos) = game.targets[game.player] {
+                if let Some((x, y)) = self.map_to_display(pos) {
+                    queue!(self.stdout, MoveTo(x, y), PrintStyledContent("X".green()))?;
+                }
+            }
+        }
+
         self.stdout.flush()?;
         Ok(())
     }
@@ -212,6 +221,10 @@ impl UserInterface for Terminal {
                 break;
             }
 
+            if !defender && game.pos.is_none() {
+                break;
+            }
+
             if poll(Duration::from_millis(TIMEOUT))? {
                 match read()? {
                     Event::Key(event) => {
@@ -231,6 +244,10 @@ impl UserInterface for Terminal {
             }
 
             self.display(game, defender)?;
+            if !defender && game.pos == game.targets[game.player] {
+                game.pos = None;
+                break;
+            }
         }
 
         Ok(())
