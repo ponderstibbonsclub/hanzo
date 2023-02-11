@@ -10,7 +10,7 @@ use std::io::{self, Stdout, Write};
 use std::ops::Drop;
 use std::time::{Duration, Instant};
 
-const TIMEOUT: u64 = 200;
+const TIMEOUT: u64 = 300;
 const ACTIONS: isize = 5;
 
 pub struct Terminal {
@@ -152,8 +152,19 @@ impl UserInterface for Terminal {
             }
         }
 
-        // Display guards
         for (i, (pos, _dir)) in game.guards.iter().flatten().enumerate() {
+            // View cones
+            for (pos, tile) in game.view_cone(i).iter() {
+                if let Some((x, y)) = self.map_to_display(*pos) {
+                    queue!(
+                        self.stdout,
+                        MoveTo(x, y),
+                        PrintStyledContent(tile.to_string().on_red())
+                    )?;
+                }
+            }
+
+            // Display guards
             if let Some((x, y)) = self.map_to_display(*pos) {
                 let g = if defender && i == self.guard {
                     "G".yellow()
@@ -162,24 +173,18 @@ impl UserInterface for Terminal {
                 };
                 queue!(self.stdout, MoveTo(x, y), PrintStyledContent(g))?;
             }
-
-            // View cones
-            for (pos, tile) in game.view_cone(i).iter() {
-                if let Some((x, y)) = self.map_to_display(*pos) {
-                    queue!(
-                        self.stdout,
-                        MoveTo(x, y),
-                        PrintStyledContent(tile.to_string().red())
-                    )?;
-                }
-            }
         }
 
-        // Display player
-        if !defender || game.visible() {
-            if let Some(pos) = game.pos {
-                if let Some((x, y)) = self.map_to_display(pos) {
-                    queue!(self.stdout, MoveTo(x, y), PrintStyledContent("A".magenta()))?;
+        // Display players
+        for (i, pos) in game.positions.iter().flatten().enumerate() {
+            if !defender || game.visible(i) {
+                if let Some((x, y)) = self.map_to_display(*pos) {
+                    let p = if i != game.player {
+                        "A".white()
+                    } else {
+                        "A".magenta()
+                    };
+                    queue!(self.stdout, MoveTo(x, y), PrintStyledContent(p))?;
                 }
             }
         }
@@ -255,8 +260,8 @@ impl UserInterface for Terminal {
                 }
             }
 
-            // Check for attacker elimination
-            if game.visible() {
+            // Check for attacker elimination (on their turn only)
+            if game.visible(game.player) {
                 detected -= 1;
             }
             if detected == 0 {

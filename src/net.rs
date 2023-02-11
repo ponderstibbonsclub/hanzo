@@ -16,6 +16,9 @@ pub struct MsgToClient {
     pub defender: bool,
     // Player's position (if not defender and if alive)
     pub pos: Option<Point>,
+    // Players' positions (if alive)
+    // TODO: cleanup redundant info
+    pub positions: Vec<Option<Point>>,
     // Guards' positions (if alive)
     pub guards: Vec<Option<(Point, Direction)>>,
     // Game finished?
@@ -176,7 +179,7 @@ impl<T: UserInterface> Client<T> {
         loop {
             // Receive update from server
             let msg: MsgToClient = deserialize_from(&self.stream)?;
-            self.ui.display(&self.game, msg.defender)?;
+            self.game.display(&mut self.ui, &msg)?;
             if msg.quit != Status::Running {
                 quit = msg.quit;
                 break;
