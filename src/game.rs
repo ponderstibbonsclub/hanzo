@@ -1,5 +1,8 @@
 use crate::{MsgToClient, MsgToServer, Result, ServerCli, UserInterface};
-use rand::random;
+use rand::{
+    distributions::{Distribution, Standard},
+    random, Rng,
+};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::time::Duration;
@@ -13,8 +16,8 @@ pub enum Tile {
 impl fmt::Display for Tile {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Tile::Floor => write!(f, "·"),
-            Tile::Wall => write!(f, "█"),
+            Tile::Floor => write!(f, "."),
+            Tile::Wall => write!(f, "#"),
         }
     }
 }
@@ -101,6 +104,25 @@ impl<'a> Iterator for Tiles<'a> {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl Distribution<Direction> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Direction {
+        match rng.gen_range(0..4) {
+            0 => Direction::Up,
+            1 => Direction::Down,
+            2 => Direction::Left,
+            _ => Direction::Right,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Game {
     pub address: String,
@@ -110,7 +132,7 @@ pub struct Game {
     pub defender: usize,
     pub pos: Option<Point>,
     pub positions: Vec<Option<Point>>,
-    pub guards: Vec<Option<Point>>,
+    pub guards: Vec<Option<(Point, Direction)>>,
     pub map: Map,
 }
 
@@ -126,7 +148,9 @@ impl Game {
             (0..cli.players).map(|_| Some(map.random())).collect();
         let defender = random::<usize>() % cli.players;
         positions[defender] = None;
-        let guards: Vec<Option<Point>> = (0..cli.guards).map(|_| Some(map.random())).collect();
+        let guards: Vec<Option<(Point, Direction)>> = (0..cli.guards)
+            .map(|_| Some((map.random(), random::<Direction>())))
+            .collect();
 
         Game {
             address,
@@ -169,10 +193,23 @@ impl Game {
             quit: self.quit,
         })
     }
+    /// Tiles within guard's line-of-sight
+    pub fn view_cone(&self, _guard: usize) -> Vec<(Point, Tile)> {
+        // TODO
+        vec![]
+    }
 
     /// Is the player visible?
     pub fn visible(&self) -> bool {
-        // TODO view-cones
+        if let Some(player) = self.pos {
+            for i in 0..self.guards.len() {
+                for (view, _) in self.view_cone(i).iter() {
+                    if *view == player {
+                        return true;
+                    }
+                }
+            }
+        }
         false
     }
 
@@ -184,6 +221,40 @@ impl Game {
             if let Some(tile) = self.map.at(x2 as usize, y2 as usize) {
                 if tile == Tile::Floor {
                     self.pos = Some((x2 as u8, y2 as u8));
+                }
+            }
+        }
+    }
+
+    /// Move guard position
+    pub fn move_guard(&mut self, guard: usize, dx: i16, dy: i16) {
+        if let Some(((x, y), dir)) = self.guards[guard] {
+            let x2 = (x as i16) + dx;
+            let y2 = (y as i16) + dy;
+            if let Some(tile) = self.map.at(x2 as usize, y2 as usize) {
+                if tile == Tile::Floor {
+                    self.guards[guard] = Some(((x2 as u8, y2 as u8), dir));
+                }
+            }
+        }
+    }
+
+    /// Move guard direction
+    pub fn rotate_guard(&mut self, guard: usize, clockwise: bool) {
+        if let Some((pos, dir)) = self.guards[guard] {
+            if clockwise {
+                self.guards[guard] = match dir {
+                    Direction::Up => Some((pos, Direction::Right)),
+                    Direction::Right => Some((pos, Direction::Down)),
+                    Direction::Down => Some((pos, Direction::Left)),
+                    Direction::Left => Some((pos, Direction::Up)),
+                }
+            } else {
+                self.guards[guard] = match dir {
+                    Direction::Up => Some((pos, Direction::Left)),
+                    Direction::Right => Some((pos, Direction::Up)),
+                    Direction::Down => Some((pos, Direction::Right)),
+                    Direction::Left => Some((pos, Direction::Down)),
                 }
             }
         }

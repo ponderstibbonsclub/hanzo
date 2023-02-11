@@ -1,4 +1,4 @@
-use crate::{Game, Point, Result, UserInterface};
+use crate::{Direction, Game, Point, Result, UserInterface};
 use bincode::{deserialize_from, serialize_into};
 use log::{info, LevelFilter};
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,7 @@ pub struct MsgToClient {
     // Player's position (if not defender and if alive)
     pub pos: Option<Point>,
     // Guards' positions (if alive)
-    pub guards: Vec<Option<Point>>,
+    pub guards: Vec<Option<(Point, Direction)>>,
     // Game finished?
     pub quit: bool,
 }
@@ -28,7 +28,7 @@ pub struct MsgToServer {
     // New position of player's character
     pub new: Option<Point>,
     // New positions of guards
-    pub guards: Vec<Option<Point>>,
+    pub guards: Vec<Option<(Point, Direction)>>,
     // Game finished?
     pub quit: bool,
 }

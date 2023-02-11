@@ -17,6 +17,7 @@ pub struct Terminal {
     stdout: Stdout,
     size: (u16, u16),
     centre: Option<Point>,
+    guard: usize,
 }
 
 impl Terminal {
@@ -26,22 +27,35 @@ impl Terminal {
         let size = terminal::size()?;
         let centre = None;
         execute!(stdout, Hide)?;
+        let guard = 0;
 
         Ok(Terminal {
             stdout,
             size,
             centre,
+            guard,
         })
     }
 
-    fn defender(&self, game: &mut Game, key: KeyCode) -> isize {
-        // TODO control guards
+    fn defender(&mut self, game: &mut Game, key: KeyCode) -> isize {
         match key {
+            KeyCode::Tab => loop {
+                self.guard = (self.guard + 1) % game.guards.len();
+                if game.guards[self.guard].is_some() {
+                    return 0;
+                }
+            },
+            KeyCode::Left => game.move_guard(self.guard, -1, 0),
+            KeyCode::Right => game.move_guard(self.guard, 1, 0),
+            KeyCode::Up => game.move_guard(self.guard, 0, -1),
+            KeyCode::Down => game.move_guard(self.guard, 0, 1),
             KeyCode::Char(c) => match c {
                 'q' => {
                     game.quit = true;
                     return ACTIONS;
                 }
+                '[' => game.rotate_guard(self.guard, false),
+                ']' => game.rotate_guard(self.guard, true),
                 '.' => (),
                 _ => return 0,
             },
@@ -51,7 +65,6 @@ impl Terminal {
     }
 
     fn player(&self, game: &mut Game, key: KeyCode) -> isize {
-        // TODO control player
         match key {
             KeyCode::Left => game.move_player(-1, 0),
             KeyCode::Right => game.move_player(1, 0),
@@ -68,6 +81,18 @@ impl Terminal {
             _ => return 0,
         }
         1
+    }
+
+    /// Display game status
+    fn status(&mut self, game: &Game, ap: isize, rem: Duration) -> Result<()> {
+        self.message(&format!(
+            "Attackers: {}, Guards: {}, Actions: {}, Turn Time: {}s",
+            game.positions.iter().filter(|&x| x.is_some()).count(),
+            game.guards.iter().filter(|&x| x.is_some()).count(),
+            ap,
+            rem.as_secs(),
+        ))?;
+        Ok(())
     }
 
     /// Centre view of map on desired point
@@ -106,7 +131,13 @@ impl UserInterface for Terminal {
         queue!(self.stdout, Clear(ClearType::All))?;
         self.message("Waiting for other player(s)...")?;
 
-        if !defender {
+        if defender {
+            self.centre = if let Some((pos, _)) = game.guards[self.guard] {
+                Some(pos)
+            } else {
+                None
+            };
+        } else {
             self.centre = game.pos;
         }
 
@@ -122,18 +153,33 @@ impl UserInterface for Terminal {
         }
 
         // Display guards
-        for pos in game.guards.iter().flatten() {
+        for (i, (pos, _dir)) in game.guards.iter().flatten().enumerate() {
             if let Some((x, y)) = self.map_to_display(*pos) {
-                queue!(self.stdout, MoveTo(x, y), PrintStyledContent("☻".cyan()))?;
+                let g = if defender && i == self.guard {
+                    "G".yellow()
+                } else {
+                    "G".cyan()
+                };
+                queue!(self.stdout, MoveTo(x, y), PrintStyledContent(g))?;
             }
-            // TODO view-cones
+
+            // View cones
+            for (pos, tile) in game.view_cone(i).iter() {
+                if let Some((x, y)) = self.map_to_display(*pos) {
+                    queue!(
+                        self.stdout,
+                        MoveTo(x, y),
+                        PrintStyledContent(tile.to_string().red())
+                    )?;
+                }
+            }
         }
 
         // Display player
         if !defender || game.visible() {
             if let Some(pos) = game.pos {
                 if let Some((x, y)) = self.map_to_display(pos) {
-                    queue!(self.stdout, MoveTo(x, y), PrintStyledContent("☺".magenta()))?;
+                    queue!(self.stdout, MoveTo(x, y), PrintStyledContent("A".magenta()))?;
                 }
             }
         }
@@ -161,7 +207,7 @@ impl UserInterface for Terminal {
         let mut actions: isize = ACTIONS;
         while actions > 0 {
             if let Some(remaining) = game.timer.checked_sub(timer.elapsed()) {
-                self.message(&format!("{} seconds remaining...", remaining.as_secs()))?;
+                self.status(game, actions, remaining)?;
             } else {
                 break;
             }

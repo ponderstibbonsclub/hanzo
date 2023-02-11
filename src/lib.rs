@@ -3,7 +3,7 @@ mod net;
 mod ui;
 
 use clap::Parser;
-pub use game::{Game, Point};
+pub use game::{Direction, Game, Point};
 pub use net::{Client, MsgToClient, MsgToServer, Server};
 pub use ui::{term::Terminal, UserInterface};
 
