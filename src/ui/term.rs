@@ -3,7 +3,7 @@ use crossterm::{
     cursor::{Hide, MoveTo, Show},
     event::{poll, read, Event, KeyCode},
     execute, queue,
-    style::{Print, PrintStyledContent, Stylize},
+    style::{PrintStyledContent, Stylize},
     terminal::{self, Clear, ClearType},
 };
 use std::io::{self, Stdout, Write};
@@ -11,7 +11,8 @@ use std::ops::Drop;
 use std::time::{Duration, Instant};
 
 const TIMEOUT: u64 = 300;
-const ACTIONS: isize = 5;
+const ATTACKER_ACTIONS: isize = 5;
+const DEFENDER_ACTIONS: isize = 8;
 
 pub struct Terminal {
     stdout: Stdout,
@@ -52,7 +53,7 @@ impl Terminal {
             KeyCode::Char(c) => match c {
                 'q' => {
                     game.quit = Status::Quit;
-                    return ACTIONS;
+                    return DEFENDER_ACTIONS;
                 }
                 '[' => game.rotate_guard(self.guard, false),
                 ']' => game.rotate_guard(self.guard, true),
@@ -73,7 +74,7 @@ impl Terminal {
             KeyCode::Char(c) => match c {
                 'q' => {
                     game.quit = Status::Quit;
-                    return ACTIONS;
+                    return ATTACKER_ACTIONS;
                 }
                 '.' => (),
                 _ => return 0,
@@ -86,7 +87,7 @@ impl Terminal {
     /// Display game status
     fn status(&mut self, game: &Game, ap: isize, rem: Duration) -> Result<()> {
         self.message(&format!(
-            "Attackers: {}, Guards: {}, Actions: {}, Turn Time: {}s",
+            "Your turn! Attackers: {}, Guards: {}, Actions: {}, Turn Time: {}s",
             game.positions.iter().filter(|&x| x.is_some()).count(),
             game.guards.iter().filter(|&x| x.is_some()).count(),
             ap,
@@ -138,7 +139,7 @@ impl UserInterface for Terminal {
                 None
             };
         } else {
-            self.centre = game.pos;
+            self.centre = game.positions[game.player];
         }
 
         // Display map
@@ -152,39 +153,43 @@ impl UserInterface for Terminal {
             }
         }
 
-        for (i, (pos, _dir)) in game.guards.iter().flatten().enumerate() {
-            // View cones
-            for (pos, tile) in game.view_cone(i).iter() {
-                if let Some((x, y)) = self.map_to_display(*pos) {
-                    queue!(
-                        self.stdout,
-                        MoveTo(x, y),
-                        PrintStyledContent(tile.to_string().on_red())
-                    )?;
+        for (i, guard) in game.guards.iter().enumerate() {
+            if let Some((pos, _dir)) = guard {
+                // View cones
+                for (pos, tile) in game.view_cone(i).iter() {
+                    if let Some((x, y)) = self.map_to_display(*pos) {
+                        queue!(
+                            self.stdout,
+                            MoveTo(x, y),
+                            PrintStyledContent(tile.to_string().on_red())
+                        )?;
+                    }
                 }
-            }
 
-            // Display guards
-            if let Some((x, y)) = self.map_to_display(*pos) {
-                let g = if defender && i == self.guard {
-                    "G".yellow()
-                } else {
-                    "G".cyan()
-                };
-                queue!(self.stdout, MoveTo(x, y), PrintStyledContent(g))?;
+                // Display guards
+                if let Some((x, y)) = self.map_to_display(*pos) {
+                    let g = if defender && i == self.guard {
+                        "G".yellow()
+                    } else {
+                        "G".cyan()
+                    };
+                    queue!(self.stdout, MoveTo(x, y), PrintStyledContent(g))?;
+                }
             }
         }
 
         // Display players
-        for (i, pos) in game.positions.iter().flatten().enumerate() {
-            if !defender || game.visible(i) {
-                if let Some((x, y)) = self.map_to_display(*pos) {
-                    let p = if i != game.player {
-                        "A".white()
-                    } else {
-                        "A".magenta()
-                    };
-                    queue!(self.stdout, MoveTo(x, y), PrintStyledContent(p))?;
+        for (i, player) in game.positions.iter().enumerate() {
+            if let Some(pos) = player {
+                if !defender || game.visible(i) {
+                    if let Some((x, y)) = self.map_to_display(*pos) {
+                        let p = if i != game.player {
+                            "A".white()
+                        } else {
+                            "A".green().bold()
+                        };
+                        queue!(self.stdout, MoveTo(x, y), PrintStyledContent(p))?;
+                    }
                 }
             }
         }
@@ -207,7 +212,7 @@ impl UserInterface for Terminal {
         queue!(
             self.stdout,
             MoveTo(0, self.size.1 - 1),
-            Print(msg),
+            PrintStyledContent(msg.magenta()),
             Clear(ClearType::UntilNewLine),
         )?;
         self.stdout.flush()?;
@@ -219,7 +224,11 @@ impl UserInterface for Terminal {
         let timer = Instant::now();
 
         let mut detected: isize = 3;
-        let mut actions: isize = ACTIONS;
+        let mut actions: isize = if defender {
+            DEFENDER_ACTIONS
+        } else {
+            ATTACKER_ACTIONS
+        };
         while actions > 0 {
             if let Some(remaining) = game.timer.checked_sub(timer.elapsed()) {
                 self.status(game, actions, remaining)?;
@@ -227,7 +236,7 @@ impl UserInterface for Terminal {
                 break;
             }
 
-            if !defender && game.pos.is_none() {
+            if !defender && game.positions[game.player].is_none() {
                 break;
             }
 
@@ -251,7 +260,7 @@ impl UserInterface for Terminal {
 
             // Check for guard elimination
             for guard in game.guards.iter_mut() {
-                if let Some(pos) = game.pos {
+                if let Some(pos) = game.positions[game.player] {
                     if let Some((guard_pos, _)) = guard {
                         if *guard_pos == pos {
                             *guard = None;
@@ -265,12 +274,12 @@ impl UserInterface for Terminal {
                 detected -= 1;
             }
             if detected == 0 {
-                game.pos = None;
+                game.positions[game.player] = None;
             }
 
             self.display(game, defender)?;
-            if !defender && game.pos == game.targets[game.player] {
-                game.pos = None;
+            if !defender && game.positions[game.player] == game.targets[game.player] {
+                game.positions[game.player] = None;
                 break;
             }
         }

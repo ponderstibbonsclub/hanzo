@@ -9,8 +9,8 @@ use std::fmt;
 use std::time::Duration;
 
 // View-cone parameters
-const LENGTH: i16 = 8;
-const WIDTH: usize = 6;
+const LENGTH: i16 = 10;
+const WIDTH: usize = 8;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum Status {
@@ -254,7 +254,6 @@ pub struct Game {
     pub timer: Duration,
     pub defender: usize,
     pub player: usize,
-    pub pos: Option<Point>,
     pub positions: Vec<Option<Point>>,
     pub guards: Vec<Option<(Point, Direction)>>,
     pub targets: Vec<Option<Point>>,
@@ -265,7 +264,6 @@ impl Game {
     pub fn new(cli: ServerCli) -> Self {
         let address = cli.address;
         let timer = Duration::from_secs((cli.timer * 60).into());
-        let pos = None;
         let player = 0;
 
         let players: usize;
@@ -302,7 +300,6 @@ impl Game {
             timer,
             defender,
             player,
-            pos,
             positions,
             guards,
             targets,
@@ -342,7 +339,6 @@ impl Game {
     pub fn turn(&self, player: usize, current: usize) -> MsgToClient {
         let turn = player == current;
         let defender = player == self.defender;
-        let pos = self.positions[current];
         let quit = if (defender && self.quit == Status::AttackerVictory)
             || (!defender && self.quit == Status::DefenderVictory)
         {
@@ -354,7 +350,6 @@ impl Game {
         MsgToClient {
             turn,
             defender,
-            pos,
             positions: self.positions.clone(),
             guards: self.guards.clone(),
             quit,
@@ -370,7 +365,6 @@ impl Game {
 
     /// Client-side turn processing
     pub fn display<T: UserInterface>(&mut self, ui: &mut T, msg: &MsgToClient) -> Result<()> {
-        self.pos = msg.pos;
         self.positions = msg.positions.clone();
         self.guards = msg.guards.clone();
         self.quit = msg.quit;
@@ -382,7 +376,7 @@ impl Game {
     pub fn play<T: UserInterface>(&mut self, defender: bool, ui: &mut T) -> Result<MsgToServer> {
         ui.input(self, defender)?;
         Ok(MsgToServer {
-            new: self.pos,
+            new: self.positions[self.player],
             guards: self.guards.clone(),
             quit: self.quit,
         })
@@ -441,13 +435,12 @@ impl Game {
 
     /// Move player position
     pub fn move_player(&mut self, dx: i16, dy: i16) {
-        if let Some((x, y)) = self.pos {
+        if let Some((x, y)) = self.positions[self.player] {
             let x2 = (x as i16) + dx;
             let y2 = (y as i16) + dy;
             if let Some(tile) = self.map.at(x2 as usize, y2 as usize) {
                 if tile == Tile::Floor {
-                    self.pos = Some((x2 as u8, y2 as u8));
-                    self.positions[self.player] = self.pos;
+                    self.positions[self.player] = Some((x2 as u8, y2 as u8));
                 }
             }
         }

@@ -14,10 +14,7 @@ pub struct MsgToClient {
     pub turn: bool,
     // Is the player the defender?
     pub defender: bool,
-    // Player's position (if not defender and if alive)
-    pub pos: Option<Point>,
     // Players' positions (if alive)
-    // TODO: cleanup redundant info
     pub positions: Vec<Option<Point>>,
     // Guards' positions (if alive)
     pub guards: Vec<Option<(Point, Direction)>>,
@@ -115,7 +112,6 @@ impl Server {
         for i in 0..game.players {
             let mut g = game.clone();
             g.player = i;
-            g.pos = g.positions[i];
             clients.push(ClientHandle::new(&listener, g)?);
         }
 
