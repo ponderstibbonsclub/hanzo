@@ -9,8 +9,8 @@ use std::fmt;
 use std::time::Duration;
 
 // View-cone parameters
-const LENGTH: i16 = 10;
-const WIDTH: usize = 8;
+const LENGTH: i16 = 16;
+const WIDTH: usize = 10;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum Status {

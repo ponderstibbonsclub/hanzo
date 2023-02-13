@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 const TIMEOUT: u64 = 300;
 const ATTACKER_ACTIONS: isize = 5;
-const DEFENDER_ACTIONS: isize = 8;
+const DEFENDER_ACTIONS: isize = 12;
 
 pub struct Terminal {
     stdout: Stdout,
@@ -153,19 +153,21 @@ impl UserInterface for Terminal {
             }
         }
 
+        for i in 0..game.guards.len() {
+            // View cones
+            for (pos, tile) in game.view_cone(i).iter() {
+                if let Some((x, y)) = self.map_to_display(*pos) {
+                    queue!(
+                        self.stdout,
+                        MoveTo(x, y),
+                        PrintStyledContent(tile.to_string().on_red())
+                    )?;
+                }
+            }
+        }
+
         for (i, guard) in game.guards.iter().enumerate() {
             if let Some((pos, _dir)) = guard {
-                // View cones
-                for (pos, tile) in game.view_cone(i).iter() {
-                    if let Some((x, y)) = self.map_to_display(*pos) {
-                        queue!(
-                            self.stdout,
-                            MoveTo(x, y),
-                            PrintStyledContent(tile.to_string().on_red())
-                        )?;
-                    }
-                }
-
                 // Display guards
                 if let Some((x, y)) = self.map_to_display(*pos) {
                     let g = if defender && i == self.guard {
