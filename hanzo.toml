@@ -1,0 +1,29 @@
+# Timeout for reading user input in milliseconds
+input_timeout = 300
+
+# Number of actions for an attacking player per turn
+attacker_actions = 5
+
+# Number of actions for a defending player per turn
+defender_actions = 10
+
+# Number of actions within viewcone before detection
+detection_actions = 3
+
+# Length of guard's viewcone
+viewcone_length = 16
+
+# Half-width of guard's viewcone
+viewcone_width = 10
+
+# Time per turn in minutes
+turn_time = 2
+
+# Number of players
+players = 4
+
+# Number of guards for defending player
+guards = 5
+
+# Number of tiles on a side for map generation
+len = 48

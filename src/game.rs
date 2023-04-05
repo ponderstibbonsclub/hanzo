@@ -1,4 +1,4 @@
-use crate::{defaults, MsgToClient, MsgToServer, Result, ServerCli, UIBackend, UserInterface};
+use crate::{defaults, Cli, Config, MsgToClient, MsgToServer, Result, UIBackend, UserInterface};
 use rand::{
     distributions::{Distribution, Standard},
     random, Rng,
@@ -6,11 +6,6 @@ use rand::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt;
-use std::time::Duration;
-
-// View-cone parameters
-const LENGTH: i16 = 16;
-const WIDTH: usize = 10;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
@@ -249,9 +244,8 @@ impl Distribution<Direction> for Standard {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Game {
     pub address: String,
-    pub players: usize,
+    pub config: Config,
     pub quit: Status,
-    pub timer: Duration,
     pub defender: usize,
     pub player: usize,
     pub positions: Vec<Option<Point>>,
@@ -261,43 +255,21 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn new(cli: ServerCli) -> Self {
+    pub fn new(cli: Cli) -> Self {
         let address = cli.address;
-        let timer = Duration::from_secs((cli.timer * 60).into());
+        let config = Config::new();
         let player = 0;
 
-        let players: usize;
-        let map: Map;
-        let mut positions: Vec<Option<Point>>;
-        let guards: Vec<Option<(Point, Direction)>>;
-        let defender: usize;
-        let mut targets: Vec<Option<Point>>;
-        if cli.test.is_some() {
-            players = defaults::PLAYERS;
-            defender = defaults::DEFENDER;
-            map = defaults::MAP.into();
-            positions = defaults::POSITIONS.to_vec();
-            guards = defaults::GUARDS.to_vec();
-            targets = defaults::TARGETS.to_vec();
-        } else {
-            // TODO: better procedural generation
-            players = cli.players;
-            map = Map::new(cli.len);
-            positions = (0..cli.players).map(|_| Some(map.random())).collect();
-            defender = random::<usize>() % cli.players;
-            positions[defender] = None;
-            guards = (0..cli.guards)
-                .map(|_| Some((map.random(), random::<Direction>())))
-                .collect();
-            targets = (0..cli.players).map(|_| Some(map.random())).collect();
-            targets[defender] = None;
-        }
+        let defender = defaults::DEFENDER;
+        let map = defaults::MAP.into();
+        let positions = defaults::POSITIONS.to_vec();
+        let guards = defaults::GUARDS.to_vec();
+        let targets = defaults::TARGETS.to_vec();
 
         Game {
             address,
-            players,
+            config,
             quit: Status::Running,
-            timer,
             defender,
             player,
             positions,
@@ -396,23 +368,47 @@ impl Game {
         let mut ends = HashSet::new();
         if let Some((pos, dir)) = self.guards[guard] {
             // Determine edge of cone
-            for i in 0..WIDTH {
+            for i in 0..self.config.viewcone_width {
                 match dir {
                     Direction::Up => {
-                        ends.insert((pos.0 as i16 + i as i16, pos.1 as i16 - LENGTH));
-                        ends.insert((pos.0 as i16 - i as i16, pos.1 as i16 - LENGTH));
+                        ends.insert((
+                            pos.0 as i16 + i as i16,
+                            pos.1 as i16 - self.config.viewcone_length,
+                        ));
+                        ends.insert((
+                            pos.0 as i16 - i as i16,
+                            pos.1 as i16 - self.config.viewcone_length,
+                        ));
                     }
                     Direction::Right => {
-                        ends.insert((pos.0 as i16 + LENGTH, pos.1 as i16 + i as i16));
-                        ends.insert((pos.0 as i16 + LENGTH, pos.1 as i16 - i as i16));
+                        ends.insert((
+                            pos.0 as i16 + self.config.viewcone_length,
+                            pos.1 as i16 + i as i16,
+                        ));
+                        ends.insert((
+                            pos.0 as i16 + self.config.viewcone_length,
+                            pos.1 as i16 - i as i16,
+                        ));
                     }
                     Direction::Down => {
-                        ends.insert((pos.0 as i16 + i as i16, pos.1 as i16 + LENGTH));
-                        ends.insert((pos.0 as i16 - i as i16, pos.1 as i16 + LENGTH));
+                        ends.insert((
+                            pos.0 as i16 + i as i16,
+                            pos.1 as i16 + self.config.viewcone_length,
+                        ));
+                        ends.insert((
+                            pos.0 as i16 - i as i16,
+                            pos.1 as i16 + self.config.viewcone_length,
+                        ));
                     }
                     Direction::Left => {
-                        ends.insert((pos.0 as i16 - LENGTH, pos.1 as i16 + i as i16));
-                        ends.insert((pos.0 as i16 - LENGTH, pos.1 as i16 - i as i16));
+                        ends.insert((
+                            pos.0 as i16 - self.config.viewcone_length,
+                            pos.1 as i16 + i as i16,
+                        ));
+                        ends.insert((
+                            pos.0 as i16 - self.config.viewcone_length,
+                            pos.1 as i16 - i as i16,
+                        ));
                     }
                 }
             }

@@ -3,10 +3,6 @@ pub mod term;
 use crate::{Game, Point, Result, Status};
 use std::time::{Duration, Instant};
 
-const TIMEOUT: u64 = 300;
-const ATTACKER_ACTIONS: isize = 5;
-const DEFENDER_ACTIONS: isize = 12;
-
 pub enum Key {
     Tab,
     Left,
@@ -89,7 +85,7 @@ impl<T: UIBackend> UserInterface<T> {
             Key::Char(c) => match c {
                 'q' => {
                     game.quit = Status::Quit;
-                    return DEFENDER_ACTIONS;
+                    return game.config.defender_actions;
                 }
                 '[' => game.rotate_guard(self.guard, false),
                 ']' => game.rotate_guard(self.guard, true),
@@ -110,7 +106,7 @@ impl<T: UIBackend> UserInterface<T> {
             Key::Char(c) => match c {
                 'q' => {
                     game.quit = Status::Quit;
-                    return ATTACKER_ACTIONS;
+                    return game.config.attacker_actions;
                 }
                 '.' => (),
                 _ => return 0,
@@ -238,12 +234,12 @@ impl<T: UIBackend> UserInterface<T> {
 
         let mut detected: isize = 3;
         let mut actions: isize = if defender {
-            DEFENDER_ACTIONS
+            game.config.defender_actions
         } else {
-            ATTACKER_ACTIONS
+            game.config.attacker_actions
         };
         while actions > 0 {
-            if let Some(remaining) = game.timer.checked_sub(timer.elapsed()) {
+            if let Some(remaining) = game.config.turn_time.checked_sub(timer.elapsed()) {
                 self.status(game, actions, remaining)?;
             } else {
                 break;
@@ -253,7 +249,10 @@ impl<T: UIBackend> UserInterface<T> {
                 break;
             }
 
-            if let Some(k) = self.backend.input(Duration::from_millis(TIMEOUT))? {
+            if let Some(k) = self
+                .backend
+                .input(Duration::from_millis(game.config.input_timeout))?
+            {
                 actions -= if defender {
                     self.defender(game, k)
                 } else {

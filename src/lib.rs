@@ -1,9 +1,11 @@
+mod config;
 pub mod defaults;
 mod game;
 mod net;
 mod ui;
 
 use clap::Parser;
+pub use config::Config;
 pub use game::{Direction, Game, Point, Status};
 pub use net::{Client, MsgToClient, MsgToServer, Server};
 pub use ui::{term::Terminal, Colour, Key, UIBackend, UserInterface};
@@ -11,23 +13,7 @@ pub use ui::{term::Terminal, Colour, Key, UIBackend, UserInterface};
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[derive(Parser)]
-pub struct ServerCli {
-    /// IP address of server
-    pub address: String,
-    /// Number of players
-    pub players: usize,
-    /// Number of guards
-    pub guards: usize,
-    /// Length of side of map
-    pub len: usize,
-    /// Turn time (minutes)
-    pub timer: u8,
-    /// Test settings
-    pub test: Option<bool>,
-}
-
-#[derive(Parser)]
-pub struct ClientCli {
+pub struct Cli {
     /// IP address of server
     pub address: String,
 }

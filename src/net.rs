@@ -1,8 +1,7 @@
 use crate::{Direction, Game, Point, Result, Status, UIBackend, UserInterface};
 use bincode::{deserialize_from, serialize_into};
-use log::{info, LevelFilter};
+use log::info;
 use serde::{Deserialize, Serialize};
-use simple_logging::log_to_stderr;
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread::{spawn, JoinHandle};
@@ -103,12 +102,14 @@ pub struct Server {
 
 impl Server {
     pub fn new(game: Game) -> Result<Self> {
-        log_to_stderr(LevelFilter::Info);
-        info!("Address: {}, players: {}", game.address, game.players);
+        info!(
+            "Address: {}, players: {}",
+            game.address, game.config.players
+        );
 
-        let mut clients = Vec::with_capacity(game.players);
+        let mut clients = Vec::with_capacity(game.config.players);
         let listener = TcpListener::bind(&game.address)?;
-        for i in 0..game.players {
+        for i in 0..game.config.players {
             let mut g = game.clone();
             g.player = i;
             clients.push(ClientHandle::new(&listener, g)?);
@@ -139,7 +140,7 @@ impl Server {
             info!("Received update from player {}", current);
             self.game.update(msg, current);
 
-            current = (current + 1) % self.game.players;
+            current = (current + 1) % self.game.config.players;
         }
 
         for client in self.clients.drain(0..) {
@@ -159,8 +160,6 @@ pub struct Client<T: UIBackend> {
 
 impl<T: UIBackend> Client<T> {
     pub fn new(address: &str, ui: UserInterface<T>) -> Result<Self> {
-        log_to_stderr(LevelFilter::Info);
-
         let stream = TcpStream::connect(address)?;
         let game = deserialize_from(&stream)?;
         info!("Connected to {}. Waiting for server...", address);
