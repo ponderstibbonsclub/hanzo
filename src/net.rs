@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread::{spawn, JoinHandle};
+use std::time::Duration;
 
 #[derive(Serialize, Deserialize, Debug)]
 /// Information sent from server to client each turn
@@ -161,6 +162,7 @@ pub struct Client<T: UIBackend> {
 impl<T: UIBackend> Client<T> {
     pub fn new(address: &str, ui: UserInterface<T>) -> Result<Self> {
         let stream = TcpStream::connect(address)?;
+        stream.set_read_timeout(Some(Duration::from_millis(100)))?;
         let game = deserialize_from(&stream)?;
         info!("Connected to {}. Waiting for server...", address);
 
@@ -171,18 +173,20 @@ impl<T: UIBackend> Client<T> {
         let quit: Status;
         loop {
             // Receive update from server
-            let msg: MsgToClient = deserialize_from(&self.stream)?;
-            self.ui.message("Waiting for other players(s)...")?;
-            self.game.display(&mut self.ui, &msg)?;
-            if msg.quit != Status::Running {
-                quit = msg.quit;
-                break;
-            }
+            if let Ok(msg) = deserialize_from::<&TcpStream, MsgToClient>(&self.stream) {
+                self.game.display(&mut self.ui, &msg)?;
+                if msg.quit != Status::Running {
+                    quit = msg.quit;
+                    break;
+                }
 
-            // Send back update if it's our turn
-            if msg.turn {
-                let msg = self.game.play(msg.defender, &mut self.ui)?;
-                serialize_into(&self.stream, &msg)?;
+                // Send back update if it's our turn
+                if msg.turn {
+                    let msg = self.game.play(msg.defender, &mut self.ui)?;
+                    serialize_into(&self.stream, &msg)?;
+                }
+            } else {
+                self.ui.idle()?;
             }
         }
         self.ui.reset();

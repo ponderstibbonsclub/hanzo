@@ -295,6 +295,13 @@ impl<T: UIBackend> UserInterface<T> {
     pub fn reset(&mut self) {
         self.backend.reset();
     }
+
+    /// Idle screen
+    pub fn idle(&mut self) -> Result<()> {
+        // Consume accidental input
+        let _ = self.backend.input(Duration::from_millis(100))?;
+        self.message("Waiting for other players...")
+    }
 }
 
 impl<T: UIBackend> Drop for UserInterface<T> {
