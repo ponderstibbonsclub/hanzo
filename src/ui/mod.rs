@@ -141,7 +141,7 @@ impl<T: UIBackend> UserInterface<T> {
                 return None;
             }
         } else {
-            (pos.0 as u8, pos.1 as u8)
+            (pos.0, pos.1)
         };
 
         if new.0 < size.0 && new.1 < size.1 - 1 {
