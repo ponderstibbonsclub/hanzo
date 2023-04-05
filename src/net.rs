@@ -1,4 +1,4 @@
-use crate::{Direction, Game, Point, Result, Status, UserInterface};
+use crate::{Direction, Game, Point, Result, Status, UIBackend, UserInterface};
 use bincode::{deserialize_from, serialize_into};
 use log::{info, LevelFilter};
 use serde::{Deserialize, Serialize};
@@ -97,7 +97,6 @@ impl ClientHandle {
 
 /// A server to manage client connections
 pub struct Server {
-    //listener: TcpListener,
     clients: Vec<ClientHandle>,
     game: Game,
 }
@@ -152,16 +151,15 @@ impl Server {
 }
 
 /// A player client
-pub struct Client<T: UserInterface> {
+pub struct Client<T: UIBackend> {
     stream: TcpStream,
     game: Game,
-    ui: T,
+    ui: UserInterface<T>,
 }
 
-impl<T: UserInterface> Client<T> {
-    pub fn new(address: &str, ui: T) -> Result<Self> {
+impl<T: UIBackend> Client<T> {
+    pub fn new(address: &str, ui: UserInterface<T>) -> Result<Self> {
         log_to_stderr(LevelFilter::Info);
-        //log_to_file("hanzo.log", LevelFilter::Error)?;
 
         let stream = TcpStream::connect(address)?;
         let game = deserialize_from(&stream)?;
@@ -175,6 +173,7 @@ impl<T: UserInterface> Client<T> {
         loop {
             // Receive update from server
             let msg: MsgToClient = deserialize_from(&self.stream)?;
+            self.ui.message("Waiting for other players(s)...")?;
             self.game.display(&mut self.ui, &msg)?;
             if msg.quit != Status::Running {
                 quit = msg.quit;

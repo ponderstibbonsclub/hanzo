@@ -1,4 +1,4 @@
-use crate::{defaults, MsgToClient, MsgToServer, Result, ServerCli, UserInterface};
+use crate::{defaults, MsgToClient, MsgToServer, Result, ServerCli, UIBackend, UserInterface};
 use rand::{
     distributions::{Distribution, Standard},
     random, Rng,
@@ -12,7 +12,7 @@ use std::time::Duration;
 const LENGTH: i16 = 16;
 const WIDTH: usize = 10;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
     Running,
     AttackerVictory,
@@ -364,7 +364,11 @@ impl Game {
     }
 
     /// Client-side turn processing
-    pub fn display<T: UserInterface>(&mut self, ui: &mut T, msg: &MsgToClient) -> Result<()> {
+    pub fn display<T: UIBackend>(
+        &mut self,
+        ui: &mut UserInterface<T>,
+        msg: &MsgToClient,
+    ) -> Result<()> {
         self.positions = msg.positions.clone();
         self.guards = msg.guards.clone();
         self.quit = msg.quit;
@@ -373,7 +377,11 @@ impl Game {
     }
 
     /// Client-side turn processing
-    pub fn play<T: UserInterface>(&mut self, defender: bool, ui: &mut T) -> Result<MsgToServer> {
+    pub fn play<T: UIBackend>(
+        &mut self,
+        defender: bool,
+        ui: &mut UserInterface<T>,
+    ) -> Result<MsgToServer> {
         ui.input(self, defender)?;
         Ok(MsgToServer {
             new: self.positions[self.player],
