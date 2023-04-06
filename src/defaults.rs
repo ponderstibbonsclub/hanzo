@@ -53,8 +53,12 @@ pub const MAP: &str = "
 
 pub const PLAYERS: usize = 4;
 
-pub const POSITIONS: [Option<Point>; 4] =
-    [Some((40, 1)), Some((1, 5)), Some((45, 45)), Some((1, 40))];
+pub const POSITIONS: [Option<(Point, Direction)>; 4] = [
+    Some(((40, 1), Direction::Down)),
+    Some(((1, 5), Direction::Right)),
+    Some(((45, 45), Direction::Left)),
+    Some(((2, 40), Direction::Up)),
+];
 
 pub const TARGETS: [Option<Point>; 4] =
     [Some((1, 46)), Some((45, 45)), Some((1, 1)), Some((42, 1))];

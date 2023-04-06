@@ -1,7 +1,8 @@
 pub mod term;
 
-use crate::{Game, Point, Result, Status};
+use crate::{Direction, Game, Point, Result, Status};
 use rand::{thread_rng, Rng};
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 pub enum Key {
@@ -55,7 +56,7 @@ pub trait UIBackend {
 
 pub struct UserInterface<T: UIBackend> {
     backend: T,
-    centre: Option<Point>,
+    centre: Option<(Point, Direction)>,
     guard: usize,
 }
 
@@ -113,6 +114,8 @@ impl<T: UIBackend> UserInterface<T> {
                     return game.config.attacker_actions;
                 }
                 '.' => (),
+                '[' => game.rotate_player(false),
+                ']' => game.rotate_player(true),
                 _ => return 0,
             },
         }
@@ -134,7 +137,7 @@ impl<T: UIBackend> UserInterface<T> {
     /// Centre view of map on desired point
     fn map_to_display(&self, pos: Point) -> Option<Point> {
         let size = self.backend.size();
-        let new = if let Some(centre) = self.centre {
+        let new = if let Some((centre, _)) = self.centre {
             let dx = (size.0 / 2) as isize - centre.0 as isize;
             let dy = ((size.1 - 1) / 2) as isize - centre.1 as isize;
             let x = pos.0 as isize + dx;
@@ -161,39 +164,57 @@ impl<T: UIBackend> UserInterface<T> {
 
     /// Display current game state on terminal
     pub fn display(&mut self, game: &Game, defender: bool) -> Result<()> {
+        if defender {
+            self.display_defender(game, false)
+        } else {
+            self.display_attacker(game)
+        }
+    }
+
+    /// Display current game state on terminal for defender
+    fn display_defender(&mut self, game: &Game, full: bool) -> Result<()> {
         self.backend.clear()?;
 
-        if defender {
-            self.centre = if let Some((pos, _)) = game.guards[self.guard] {
-                Some(pos)
-            } else {
-                None
-            };
-        } else {
-            self.centre = game.positions[game.player];
-        }
+        self.centre = game.guards[self.guard];
 
-        // Display map
-        for (pos, tile) in game.map.tiles() {
-            if let Some(p) = self.map_to_display(pos) {
-                self.backend.draw(p, &tile.to_string(), Colour::Grey)?;
-            }
-        }
-
-        for i in 0..game.guards.len() {
-            // View cones
-            for (pos, tile) in game.view_cone(i).iter() {
-                if let Some(p) = self.map_to_display(*pos) {
-                    self.backend.draw(p, &tile.to_string(), Colour::Red)?;
+        if full {
+            // Display map
+            for (pos, tile) in game.map.tiles() {
+                if let Some(p) = self.map_to_display(pos) {
+                    self.backend.draw(p, &tile.to_string(), Colour::Grey)?;
                 }
             }
         }
 
+        // Determine all positions visible to defender
+        let mut visible = HashMap::new();
+        for &guard in game.guards.iter() {
+            for (pos, tile) in game.view_cone(guard).iter() {
+                visible.insert(*pos, *tile);
+            }
+        }
+
+        for (pos, tile) in visible.iter() {
+            // Display visible map tiles
+            if let Some(p) = self.map_to_display(*pos) {
+                let c = if full { Colour::Red } else { Colour::White };
+                self.backend.draw(p, &tile.to_string(), c)?;
+            }
+
+            // Display visible players
+            for (player, _) in game.positions.iter().flatten().filter(|&p| p.0 == *pos) {
+                if let Some(p) = self.map_to_display(*player) {
+                    self.backend.draw(p, "A", Colour::White)?;
+                }
+            }
+        }
+
+        // Finally display guards
         for (i, guard) in game.guards.iter().enumerate() {
-            if let Some((pos, _dir)) = guard {
+            if let Some((pos, _)) = guard {
                 // Display guards
                 if let Some(p) = self.map_to_display(*pos) {
-                    let c = if defender && i == self.guard {
+                    let c = if i == self.guard {
                         Colour::Yellow
                     } else {
                         Colour::Cyan
@@ -203,28 +224,81 @@ impl<T: UIBackend> UserInterface<T> {
             }
         }
 
-        // Display players
-        for (i, player) in game.positions.iter().enumerate() {
-            if let Some(pos) = player {
-                if !defender || game.visible(i) {
-                    if let Some(p) = self.map_to_display(*pos) {
-                        let c = if i != game.player {
-                            Colour::White
-                        } else {
-                            Colour::Green
-                        };
-                        self.backend.draw(p, "A", c)?;
-                    }
+        self.backend.flush()?;
+        Ok(())
+    }
+
+    /// Display current game state on terminal for attacker
+    pub fn display_attacker(&mut self, game: &Game) -> Result<()> {
+        self.backend.clear()?;
+
+        self.centre = game.positions[game.player];
+
+        // Determine all positions visible to defender
+        let mut defender = HashMap::new();
+        for &guard in game.guards.iter() {
+            for (pos, tile) in game.view_cone(guard).iter() {
+                defender.insert(*pos, *tile);
+            }
+        }
+
+        // Determine all positions visible to player
+        let mut visible = HashMap::new();
+        for (pos, tile) in game.view_cone(game.positions[game.player]).iter() {
+            visible.insert(*pos, *tile);
+        }
+
+        for (pos, tile) in visible.iter() {
+            // Display visible map tiles
+            if let Some(p) = self.map_to_display(*pos) {
+                self.backend.draw(p, &tile.to_string(), Colour::White)?;
+            }
+
+            // Display visible guards' visibility
+            for &pd in defender.keys().filter(|&p| *p == *pos) {
+                if let Some(p) = self.map_to_display(pd) {
+                    self.backend.draw(p, &tile.to_string(), Colour::Red)?;
+                }
+            }
+
+            // Display visible guards
+            for guard in game
+                .guards
+                .iter()
+                .flatten()
+                .map(|x| x.0)
+                .filter(|&p| p == *pos)
+            {
+                if let Some(p) = self.map_to_display(guard) {
+                    self.backend.draw(p, "G", Colour::White)?;
+                }
+            }
+
+            // Display visible other players
+            for player in game
+                .positions
+                .iter()
+                .flatten()
+                .map(|x| x.0)
+                .filter(|&p| p == *pos)
+            {
+                if let Some(p) = self.map_to_display(player) {
+                    self.backend.draw(p, "A", Colour::White)?;
+                }
+            }
+
+            // Display visible player's target
+            if game.targets[game.player].filter(|&p| p == *pos).is_some() {
+                if let Some(p) = self.map_to_display(*pos) {
+                    self.backend.draw(p, "X", Colour::Green)?;
                 }
             }
         }
 
-        // Display player's target
-        if !defender {
-            if let Some(pos) = game.targets[game.player] {
-                if let Some(p) = self.map_to_display(pos) {
-                    self.backend.draw(p, "X", Colour::Green)?;
-                }
+        // Finally display player
+        if let Some((pos, _)) = game.positions[game.player] {
+            if let Some(p) = self.map_to_display(pos) {
+                self.backend.draw(p, "A", Colour::Green)?;
             }
         }
 
@@ -269,7 +343,7 @@ impl<T: UIBackend> UserInterface<T> {
 
             // Check for guard elimination
             for guard in game.guards.iter_mut() {
-                if let Some(pos) = game.positions[game.player] {
+                if let Some((pos, _)) = game.positions[game.player] {
                     if let Some((guard_pos, _)) = guard {
                         if *guard_pos == pos {
                             *guard = None;
@@ -287,9 +361,13 @@ impl<T: UIBackend> UserInterface<T> {
             }
 
             self.display(game, defender)?;
-            if !defender && game.positions[game.player] == game.targets[game.player] {
-                game.positions[game.player] = None;
-                break;
+            if !defender {
+                if let Some((pos, _)) = game.positions[game.player] {
+                    if Some(pos) == game.targets[game.player] {
+                        game.positions[game.player] = None;
+                        break;
+                    }
+                }
             }
         }
 
@@ -306,7 +384,7 @@ impl<T: UIBackend> UserInterface<T> {
         let players = game.positions.clone();
         game.positions = vec![None; game.config.players];
 
-        self.display(game, true)?;
+        self.display_defender(game, true)?;
         while remaining > 0 {
             self.message(&format!("{} guards remaining to place", remaining))?;
 
@@ -326,7 +404,7 @@ impl<T: UIBackend> UserInterface<T> {
                 continue;
             }
 
-            self.display(game, true)?;
+            self.display_defender(game, true)?;
         }
         game.guards = final_choice;
         game.positions = players;

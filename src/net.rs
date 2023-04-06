@@ -15,7 +15,7 @@ pub struct MsgToClient {
     // Is the player the defender?
     pub defender: bool,
     // Players' positions (if alive)
-    pub positions: Vec<Option<Point>>,
+    pub positions: Vec<Option<(Point, Direction)>>,
     // Guards' positions (if alive)
     pub guards: Vec<Option<(Point, Direction)>>,
     // Game finished?
@@ -26,7 +26,7 @@ pub struct MsgToClient {
 /// Information sent from client to server each turn
 pub struct MsgToServer {
     // New position of player's character
-    pub new: Option<Point>,
+    pub new: Option<(Point, Direction)>,
     // New positions of guards
     pub guards: Vec<Option<(Point, Direction)>>,
     // Game finished?

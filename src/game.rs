@@ -136,6 +136,7 @@ impl Map {
             sign,
             ystep,
             rotated,
+            last: Tile::Floor,
             map: self,
         }
     }
@@ -186,6 +187,7 @@ pub struct LineOfSight<'a> {
     sign: i16,
     ystep: i16,
     rotated: bool,
+    last: Tile,
     map: &'a Map,
 }
 
@@ -193,6 +195,10 @@ impl<'a> Iterator for LineOfSight<'a> {
     type Item = (Point, Tile);
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.last != Tile::Floor {
+            return None;
+        }
+
         let new = if self.rotated {
             (self.current.1, self.sign * self.current.0)
         } else {
@@ -211,18 +217,17 @@ impl<'a> Iterator for LineOfSight<'a> {
             self.error += dx;
         }
 
-        if new.0 > 0 && new.1 > 0 {
+        if new.0 >= 0 && new.1 >= 0 {
             if let Some(tile) = self.map.at(new.0 as usize, new.1 as usize) {
-                if tile == Tile::Floor {
-                    return Some(((new.0 as u8, new.1 as u8), tile));
-                }
+                self.last = tile;
+                return Some(((new.0 as u8, new.1 as u8), tile));
             }
         }
         None
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
     Up,
     Down,
@@ -248,7 +253,7 @@ pub struct Game {
     pub quit: Status,
     pub defender: usize,
     pub player: usize,
-    pub positions: Vec<Option<Point>>,
+    pub positions: Vec<Option<(Point, Direction)>>,
     pub guards: Vec<Option<(Point, Direction)>>,
     pub targets: Vec<Option<Point>>,
     pub map: Map,
@@ -289,12 +294,10 @@ impl Game {
         // Attacker victory by objective
         let mut v = true;
         for i in 0..self.positions.len() {
-            if self.positions[i].is_none() {
-                continue;
-            }
-
-            if self.positions[i] != self.targets[i] {
-                v = false;
+            if let Some((pos, _)) = self.positions[i] {
+                if Some(pos) != self.targets[i] {
+                    v = false;
+                }
             }
         }
 
@@ -378,10 +381,10 @@ impl Game {
     }
 
     /// Tiles within guard's line-of-sight
-    pub fn view_cone(&self, guard: usize) -> Vec<(Point, Tile)> {
+    pub fn view_cone(&self, start: Option<(Point, Direction)>) -> Vec<(Point, Tile)> {
         let mut cone = HashSet::new();
         let mut ends = HashSet::new();
-        if let Some((pos, dir)) = self.guards[guard] {
+        if let Some((pos, dir)) = start {
             // Determine edge of cone
             for i in 0..self.config.viewcone_width {
                 match dir {
@@ -440,9 +443,9 @@ impl Game {
 
     /// Is the player visible?
     pub fn visible(&self, player: usize) -> bool {
-        if let Some(player) = self.positions[player] {
-            for i in 0..self.guards.len() {
-                for (view, _) in self.view_cone(i).iter() {
+        if let Some((player, _)) = self.positions[player] {
+            for guard in self.guards.iter() {
+                for (view, _) in self.view_cone(*guard).iter() {
                     if *view == player {
                         return true;
                     }
@@ -454,12 +457,33 @@ impl Game {
 
     /// Move player position
     pub fn move_player(&mut self, dx: i16, dy: i16) {
-        if let Some((x, y)) = self.positions[self.player] {
+        if let Some(((x, y), dir)) = self.positions[self.player] {
             let x2 = (x as i16) + dx;
             let y2 = (y as i16) + dy;
             if let Some(tile) = self.map.at(x2 as usize, y2 as usize) {
                 if tile == Tile::Floor {
-                    self.positions[self.player] = Some((x2 as u8, y2 as u8));
+                    self.positions[self.player] = Some(((x2 as u8, y2 as u8), dir));
+                }
+            }
+        }
+    }
+
+    /// Move player direction
+    pub fn rotate_player(&mut self, clockwise: bool) {
+        if let Some((pos, dir)) = self.positions[self.player] {
+            self.positions[self.player] = if clockwise {
+                match dir {
+                    Direction::Up => Some((pos, Direction::Right)),
+                    Direction::Right => Some((pos, Direction::Down)),
+                    Direction::Down => Some((pos, Direction::Left)),
+                    Direction::Left => Some((pos, Direction::Up)),
+                }
+            } else {
+                match dir {
+                    Direction::Up => Some((pos, Direction::Left)),
+                    Direction::Right => Some((pos, Direction::Up)),
+                    Direction::Down => Some((pos, Direction::Right)),
+                    Direction::Left => Some((pos, Direction::Down)),
                 }
             }
         }
@@ -481,15 +505,15 @@ impl Game {
     /// Move guard direction
     pub fn rotate_guard(&mut self, guard: usize, clockwise: bool) {
         if let Some((pos, dir)) = self.guards[guard] {
-            if clockwise {
-                self.guards[guard] = match dir {
+            self.guards[guard] = if clockwise {
+                match dir {
                     Direction::Up => Some((pos, Direction::Right)),
                     Direction::Right => Some((pos, Direction::Down)),
                     Direction::Down => Some((pos, Direction::Left)),
                     Direction::Left => Some((pos, Direction::Up)),
                 }
             } else {
-                self.guards[guard] = match dir {
+                match dir {
                     Direction::Up => Some((pos, Direction::Left)),
                     Direction::Right => Some((pos, Direction::Up)),
                     Direction::Down => Some((pos, Direction::Right)),

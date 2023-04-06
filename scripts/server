@@ -1,2 +1,2 @@
 #!/bin/sh
-cargo run --bin server 127.0.0.1:5000
+RUST_BACKTRACE=1 cargo run --bin server 127.0.0.1:5000
