@@ -6,7 +6,7 @@ mod ui;
 
 use clap::Parser;
 pub use config::Config;
-pub use game::{Direction, Game, Point, Status};
+pub use game::{Direction, Game, Point, Status, Tile};
 pub use net::{Client, MsgToClient, MsgToServer, Server};
 pub use ui::{term::Terminal, Colour, Key, UIBackend, UserInterface};
 

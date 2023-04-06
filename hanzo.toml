@@ -11,10 +11,10 @@ defender_actions = 12
 detection_actions = 3
 
 # Length of guard's viewcone
-viewcone_length = 16
+viewcone_length = 12
 
 # Half-width of guard's viewcone
-viewcone_width = 18
+viewcone_width = 8
 
 # Time per turn in minutes
 turn_time = 2

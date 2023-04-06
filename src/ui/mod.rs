@@ -1,8 +1,8 @@
 pub mod term;
 
-use crate::{Direction, Game, Point, Result, Status};
+use crate::{Direction, Game, Point, Result, Status, Tile};
 use rand::{thread_rng, Rng};
-use std::collections::HashMap;
+use std::collections::{HashSet, HashMap};
 use std::time::{Duration, Instant};
 
 pub enum Key {
@@ -24,6 +24,7 @@ pub enum Colour {
     Cyan,
     White,
     Grey,
+    Reset,
 }
 
 pub trait UIBackend {
@@ -33,7 +34,7 @@ pub trait UIBackend {
         Self: Sized;
 
     /// Draw to the display of the user interface
-    fn draw(&mut self, pos: Point, str: &str, col: Colour) -> Result<()>;
+    fn draw(&mut self, pos: Point, str: &str, fg: Colour, bg: Colour) -> Result<()>;
 
     /// Flush display of the user interface
     fn flush(&mut self) -> Result<()>;
@@ -57,6 +58,7 @@ pub trait UIBackend {
 pub struct UserInterface<T: UIBackend> {
     backend: T,
     centre: Option<(Point, Direction)>,
+    seen: HashMap<Point, Tile>,
     guard: usize,
 }
 
@@ -64,10 +66,12 @@ impl<T: UIBackend> UserInterface<T> {
     pub fn new(backend: T) -> Self {
         let centre = None;
         let guard = 0;
+        let seen = HashMap::new();
 
         UserInterface {
             backend,
             centre,
+            seen,
             guard,
         }
     }
@@ -181,7 +185,14 @@ impl<T: UIBackend> UserInterface<T> {
             // Display map
             for (pos, tile) in game.map.tiles() {
                 if let Some(p) = self.map_to_display(pos) {
-                    self.backend.draw(p, &tile.to_string(), Colour::Grey)?;
+                    self.backend.draw(p, &tile.to_string(), Colour::Grey, Colour::Reset)?;
+                }
+            }
+        } else {
+            // Display previously seen parts of map
+            for (pos, tile) in self.seen.iter() {
+                if let Some(p) = self.map_to_display(*pos) {
+                    self.backend.draw(p, &tile.to_string(), Colour::Grey, Colour::Reset)?;
                 }
             }
         }
@@ -191,20 +202,20 @@ impl<T: UIBackend> UserInterface<T> {
         for &guard in game.guards.iter() {
             for (pos, tile) in game.view_cone(guard).iter() {
                 visible.insert(*pos, *tile);
+                self.seen.insert(*pos, *tile);
             }
         }
 
         for (pos, tile) in visible.iter() {
             // Display visible map tiles
             if let Some(p) = self.map_to_display(*pos) {
-                let c = if full { Colour::Red } else { Colour::White };
-                self.backend.draw(p, &tile.to_string(), c)?;
+                self.backend.draw(p, &tile.to_string(), Colour::Reset, Colour::Red)?;
             }
 
             // Display visible players
             for (player, _) in game.positions.iter().flatten().filter(|&p| p.0 == *pos) {
                 if let Some(p) = self.map_to_display(*player) {
-                    self.backend.draw(p, "A", Colour::White)?;
+                    self.backend.draw(p, "A", Colour::Blue, Colour::White)?;
                 }
             }
         }
@@ -217,9 +228,9 @@ impl<T: UIBackend> UserInterface<T> {
                     let c = if i == self.guard {
                         Colour::Yellow
                     } else {
-                        Colour::Cyan
+                        Colour::Reset
                     };
-                    self.backend.draw(p, "G", c)?;
+                    self.backend.draw(p, "G", Colour::Red, c)?;
                 }
             }
         }
@@ -234,11 +245,18 @@ impl<T: UIBackend> UserInterface<T> {
 
         self.centre = game.positions[game.player];
 
+        // Display previously seen parts of map
+        for (pos, tile) in self.seen.iter() {
+            if let Some(p) = self.map_to_display(*pos) {
+                self.backend.draw(p, &tile.to_string(), Colour::Grey, Colour::Reset)?;
+            }
+        }
+
         // Determine all positions visible to defender
-        let mut defender = HashMap::new();
+        let mut defender = HashSet::new();
         for &guard in game.guards.iter() {
-            for (pos, tile) in game.view_cone(guard).iter() {
-                defender.insert(*pos, *tile);
+            for (pos, _) in game.view_cone(guard).iter() {
+                defender.insert(*pos);
             }
         }
 
@@ -246,18 +264,19 @@ impl<T: UIBackend> UserInterface<T> {
         let mut visible = HashMap::new();
         for (pos, tile) in game.view_cone(game.positions[game.player]).iter() {
             visible.insert(*pos, *tile);
+            self.seen.insert(*pos, *tile);
         }
 
         for (pos, tile) in visible.iter() {
             // Display visible map tiles
             if let Some(p) = self.map_to_display(*pos) {
-                self.backend.draw(p, &tile.to_string(), Colour::White)?;
+                self.backend.draw(p, &tile.to_string(), Colour::Green, Colour::Reset)?;
             }
 
             // Display visible guards' visibility
-            for &pd in defender.keys().filter(|&p| *p == *pos) {
+            for &pd in defender.iter().filter(|&p| *p == *pos) {
                 if let Some(p) = self.map_to_display(pd) {
-                    self.backend.draw(p, &tile.to_string(), Colour::Red)?;
+                    self.backend.draw(p, &tile.to_string(), Colour::Reset, Colour::Red)?;
                 }
             }
 
@@ -270,7 +289,7 @@ impl<T: UIBackend> UserInterface<T> {
                 .filter(|&p| p == *pos)
             {
                 if let Some(p) = self.map_to_display(guard) {
-                    self.backend.draw(p, "G", Colour::White)?;
+                    self.backend.draw(p, "G", Colour::Red, Colour::Reset)?;
                 }
             }
 
@@ -283,14 +302,14 @@ impl<T: UIBackend> UserInterface<T> {
                 .filter(|&p| p == *pos)
             {
                 if let Some(p) = self.map_to_display(player) {
-                    self.backend.draw(p, "A", Colour::White)?;
+                    self.backend.draw(p, "A", Colour::Yellow,  Colour::Reset)?;
                 }
             }
 
             // Display visible player's target
             if game.targets[game.player].filter(|&p| p == *pos).is_some() {
                 if let Some(p) = self.map_to_display(*pos) {
-                    self.backend.draw(p, "X", Colour::Green)?;
+                    self.backend.draw(p, "X", Colour::Green, Colour::Reset)?;
                 }
             }
         }
@@ -298,7 +317,7 @@ impl<T: UIBackend> UserInterface<T> {
         // Finally display player
         if let Some((pos, _)) = game.positions[game.player] {
             if let Some(p) = self.map_to_display(pos) {
-                self.backend.draw(p, "A", Colour::Green)?;
+                self.backend.draw(p, "A", Colour::Cyan, Colour::Reset)?;
             }
         }
 
@@ -309,6 +328,7 @@ impl<T: UIBackend> UserInterface<T> {
     /// Event loop to get user input
     pub fn input(&mut self, game: &mut Game, defender: bool) -> Result<()> {
         let timer = Instant::now();
+        self.guard = game.guards.iter().position(|&x| x.is_some()).unwrap_or(0);
 
         let mut detected: isize = 3;
         let mut actions: isize = if defender {
@@ -426,7 +446,7 @@ Version: 0.1.0
         self.backend.clear()?;
         let mut p = (5, 5);
         for line in SPLASH.lines() {
-            self.backend.draw(p, line, Colour::Red)?;
+            self.backend.draw(p, line, Colour::Red, Colour::Reset)?;
             p.1 += 1;
         }
         self.backend.flush()?;
@@ -448,10 +468,10 @@ Version: 0.1.0
             // Draw @s at random points on the screen
             let mut rng = thread_rng();
             let size = self.backend.size();
-            for _ in 0..(size.0 / 3) {
+            for _ in 0..(size.0 / 4) {
                 let x = rng.gen_range(0..size.0);
                 let y = rng.gen_range(0..(size.1 - 1));
-                self.backend.draw((x, y), "@", Colour::Grey)?;
+                self.backend.draw((x, y), "@", Colour::Magenta, Colour::Reset)?;
             }
         }
         self.message("Waiting for other players...")?;

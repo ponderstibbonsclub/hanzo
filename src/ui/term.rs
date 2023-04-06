@@ -3,7 +3,7 @@ use crossterm::{
     cursor::{Hide, MoveTo, Show},
     event::{poll, read, Event, KeyCode},
     execute, queue,
-    style::{PrintStyledContent, Stylize},
+    style::{Print, SetForegroundColor, SetBackgroundColor, ResetColor, Color, PrintStyledContent, Stylize},
     terminal::{self, Clear, ClearType},
 };
 use std::io::{self, Stdout, Write};
@@ -12,6 +12,22 @@ use std::time::Duration;
 pub struct Terminal {
     stdout: Stdout,
     size: (u16, u16),
+}
+
+// Map from Hanzo's colours to Crossterm's
+fn colour(col: Colour) -> Color {
+    match col {
+        Colour::Black => Color::Black,
+        Colour::Red => Color::Red,
+        Colour::Green => Color::Green,
+        Colour::Yellow => Color::Yellow,
+        Colour::Blue => Color::Blue,
+        Colour::Magenta => Color::Magenta,
+        Colour::Cyan => Color::Cyan,
+        Colour::White => Color::White,
+        Colour::Grey => Color::Grey,
+        Colour::Reset => Color::Reset,
+    }
 }
 
 impl UIBackend for Terminal {
@@ -26,22 +42,14 @@ impl UIBackend for Terminal {
     }
 
     /// Display current game state on terminal
-    fn draw(&mut self, pos: Point, str: &str, col: Colour) -> Result<()> {
-        let styled = match col {
-            Colour::Black => str.black(),
-            Colour::Red => str.red(),
-            Colour::Green => str.green(),
-            Colour::Yellow => str.yellow(),
-            Colour::Blue => str.blue(),
-            Colour::Magenta => str.magenta(),
-            Colour::Cyan => str.cyan(),
-            Colour::White => str.white(),
-            Colour::Grey => str.grey(),
-        };
+    fn draw(&mut self, pos: Point, str: &str, fg: Colour, bg: Colour) -> Result<()> {
         queue!(
             self.stdout,
             MoveTo(pos.0 as u16, pos.1 as u16),
-            PrintStyledContent(styled),
+            SetForegroundColor(colour(fg)),
+            SetBackgroundColor(colour(bg)),
+            Print(str),
+            ResetColor
         )?;
         Ok(())
     }

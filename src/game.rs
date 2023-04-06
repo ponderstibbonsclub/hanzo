@@ -382,51 +382,59 @@ impl Game {
 
     /// Tiles within guard's line-of-sight
     pub fn view_cone(&self, start: Option<(Point, Direction)>) -> Vec<(Point, Tile)> {
+        fn y(r: i16, x: usize) -> i16 {
+            let xf = x as f64;
+            let rf = r as f64;
+            (rf.powi(2) - xf.powi(2)).powf(0.5) as i16
+        }
+
         let mut cone = HashSet::new();
         let mut ends = HashSet::new();
         if let Some((pos, dir)) = start {
             // Determine edge of cone
             for i in 0..self.config.viewcone_width {
-                match dir {
-                    Direction::Up => {
-                        ends.insert((
-                            pos.0 as i16 + i as i16,
-                            pos.1 as i16 - self.config.viewcone_length,
-                        ));
-                        ends.insert((
-                            pos.0 as i16 - i as i16,
-                            pos.1 as i16 - self.config.viewcone_length,
-                        ));
-                    }
-                    Direction::Right => {
-                        ends.insert((
-                            pos.0 as i16 + self.config.viewcone_length,
-                            pos.1 as i16 + i as i16,
-                        ));
-                        ends.insert((
-                            pos.0 as i16 + self.config.viewcone_length,
-                            pos.1 as i16 - i as i16,
-                        ));
-                    }
-                    Direction::Down => {
-                        ends.insert((
-                            pos.0 as i16 + i as i16,
-                            pos.1 as i16 + self.config.viewcone_length,
-                        ));
-                        ends.insert((
-                            pos.0 as i16 - i as i16,
-                            pos.1 as i16 + self.config.viewcone_length,
-                        ));
-                    }
-                    Direction::Left => {
-                        ends.insert((
-                            pos.0 as i16 - self.config.viewcone_length,
-                            pos.1 as i16 + i as i16,
-                        ));
-                        ends.insert((
-                            pos.0 as i16 - self.config.viewcone_length,
-                            pos.1 as i16 - i as i16,
-                        ));
+                for j in 0..2 {
+                    match dir {
+                        Direction::Up => {
+                            ends.insert((
+                                pos.0 as i16 + i as i16,
+                                pos.1 as i16 - y(self.config.viewcone_length, i) + j,
+                            ));
+                            ends.insert((
+                                pos.0 as i16 - i as i16,
+                                pos.1 as i16 - y(self.config.viewcone_length, i) + j,
+                            ));
+                        }
+                        Direction::Right => {
+                            ends.insert((
+                                pos.0 as i16 + y(self.config.viewcone_length, i) - j,
+                                pos.1 as i16 + i as i16,
+                            ));
+                            ends.insert((
+                                pos.0 as i16 + y(self.config.viewcone_length, i) - j,
+                                pos.1 as i16 - i as i16,
+                            ));
+                        }
+                        Direction::Down => {
+                            ends.insert((
+                                pos.0 as i16 + i as i16,
+                                pos.1 as i16 + y(self.config.viewcone_length, i) - j,
+                            ));
+                            ends.insert((
+                                pos.0 as i16 - i as i16,
+                                pos.1 as i16 + y(self.config.viewcone_length, i) - j,
+                            ));
+                        }
+                        Direction::Left => {
+                            ends.insert((
+                                pos.0 as i16 - y(self.config.viewcone_length, i) + j,
+                                pos.1 as i16 + i as i16,
+                            ));
+                            ends.insert((
+                                pos.0 as i16 - y(self.config.viewcone_length, i) + j,
+                                pos.1 as i16 - i as i16,
+                            ));
+                        }
                     }
                 }
             }
