@@ -3,7 +3,10 @@ use crossterm::{
     cursor::{Hide, MoveTo, Show},
     event::{poll, read, Event, KeyCode},
     execute, queue,
-    style::{Print, SetForegroundColor, SetBackgroundColor, ResetColor, Color, PrintStyledContent, Stylize},
+    style::{
+        Color, Print, PrintStyledContent, ResetColor, SetBackgroundColor, SetForegroundColor,
+        Stylize,
+    },
     terminal::{self, Clear, ClearType},
 };
 use std::io::{self, Stdout, Write};

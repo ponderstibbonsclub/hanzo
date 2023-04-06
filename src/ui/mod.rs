@@ -2,7 +2,7 @@ pub mod term;
 
 use crate::{Direction, Game, Point, Result, Status, Tile};
 use rand::{thread_rng, Rng};
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 pub enum Key {
@@ -185,14 +185,16 @@ impl<T: UIBackend> UserInterface<T> {
             // Display map
             for (pos, tile) in game.map.tiles() {
                 if let Some(p) = self.map_to_display(pos) {
-                    self.backend.draw(p, &tile.to_string(), Colour::Grey, Colour::Reset)?;
+                    self.backend
+                        .draw(p, &tile.to_string(), Colour::Grey, Colour::Reset)?;
                 }
             }
         } else {
             // Display previously seen parts of map
             for (pos, tile) in self.seen.iter() {
                 if let Some(p) = self.map_to_display(*pos) {
-                    self.backend.draw(p, &tile.to_string(), Colour::Grey, Colour::Reset)?;
+                    self.backend
+                        .draw(p, &tile.to_string(), Colour::Grey, Colour::Reset)?;
                 }
             }
         }
@@ -209,7 +211,8 @@ impl<T: UIBackend> UserInterface<T> {
         for (pos, tile) in visible.iter() {
             // Display visible map tiles
             if let Some(p) = self.map_to_display(*pos) {
-                self.backend.draw(p, &tile.to_string(), Colour::Reset, Colour::Red)?;
+                self.backend
+                    .draw(p, &tile.to_string(), Colour::Reset, Colour::Red)?;
             }
 
             // Display visible players
@@ -248,7 +251,8 @@ impl<T: UIBackend> UserInterface<T> {
         // Display previously seen parts of map
         for (pos, tile) in self.seen.iter() {
             if let Some(p) = self.map_to_display(*pos) {
-                self.backend.draw(p, &tile.to_string(), Colour::Grey, Colour::Reset)?;
+                self.backend
+                    .draw(p, &tile.to_string(), Colour::Grey, Colour::Reset)?;
             }
         }
 
@@ -270,13 +274,15 @@ impl<T: UIBackend> UserInterface<T> {
         for (pos, tile) in visible.iter() {
             // Display visible map tiles
             if let Some(p) = self.map_to_display(*pos) {
-                self.backend.draw(p, &tile.to_string(), Colour::Green, Colour::Reset)?;
+                self.backend
+                    .draw(p, &tile.to_string(), Colour::Green, Colour::Reset)?;
             }
 
             // Display visible guards' visibility
             for &pd in defender.iter().filter(|&p| *p == *pos) {
                 if let Some(p) = self.map_to_display(pd) {
-                    self.backend.draw(p, &tile.to_string(), Colour::Reset, Colour::Red)?;
+                    self.backend
+                        .draw(p, &tile.to_string(), Colour::Reset, Colour::Red)?;
                 }
             }
 
@@ -302,7 +308,7 @@ impl<T: UIBackend> UserInterface<T> {
                 .filter(|&p| p == *pos)
             {
                 if let Some(p) = self.map_to_display(player) {
-                    self.backend.draw(p, "A", Colour::Yellow,  Colour::Reset)?;
+                    self.backend.draw(p, "A", Colour::Yellow, Colour::Reset)?;
                 }
             }
 
@@ -471,7 +477,8 @@ Version: 0.1.0
             for _ in 0..(size.0 / 4) {
                 let x = rng.gen_range(0..size.0);
                 let y = rng.gen_range(0..(size.1 - 1));
-                self.backend.draw((x, y), "@", Colour::Magenta, Colour::Reset)?;
+                self.backend
+                    .draw((x, y), "@", Colour::Magenta, Colour::Reset)?;
             }
         }
         self.message("Waiting for other players...")?;
