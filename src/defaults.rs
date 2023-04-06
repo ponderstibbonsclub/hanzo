@@ -53,11 +53,11 @@ pub const MAP: &str = "
 
 pub const PLAYERS: usize = 4;
 
-pub const DEFENDER: usize = 3;
+pub const POSITIONS: [Option<Point>; 4] =
+    [Some((40, 1)), Some((1, 5)), Some((45, 45)), Some((1, 40))];
 
-pub const POSITIONS: [Option<Point>; 4] = [Some((40, 1)), Some((1, 5)), Some((45, 45)), None];
-
-pub const TARGETS: [Option<Point>; 4] = [Some((1, 46)), Some((45, 45)), Some((1, 1)), None];
+pub const TARGETS: [Option<Point>; 4] =
+    [Some((1, 46)), Some((45, 45)), Some((1, 1)), Some((42, 1))];
 
 pub const GUARDS: [Option<(Point, Direction)>; 5] = [
     Some(((15, 12), Direction::Up)),

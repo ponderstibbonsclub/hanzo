@@ -1,6 +1,7 @@
 pub mod term;
 
 use crate::{Game, Point, Result, Status};
+use rand::{thread_rng, Rng};
 use std::time::{Duration, Instant};
 
 pub enum Key {
@@ -70,7 +71,7 @@ impl<T: UIBackend> UserInterface<T> {
         }
     }
 
-    fn defender(&mut self, game: &mut Game, key: Key) -> isize {
+    fn defender(&mut self, game: &mut Game, key: Key, set: &mut bool) -> isize {
         match key {
             Key::Tab => loop {
                 self.guard = (self.guard + 1) % game.guards.len();
@@ -90,6 +91,9 @@ impl<T: UIBackend> UserInterface<T> {
                 '[' => game.rotate_guard(self.guard, false),
                 ']' => game.rotate_guard(self.guard, true),
                 '.' => (),
+                ' ' => {
+                    *set = true;
+                }
                 _ => return 0,
             },
         }
@@ -254,7 +258,8 @@ impl<T: UIBackend> UserInterface<T> {
                 .input(Duration::from_millis(game.config.input_timeout))?
             {
                 actions -= if defender {
-                    self.defender(game, k)
+                    let mut x = true;
+                    self.defender(game, k, &mut x)
                 } else {
                     self.player(game, k)
                 };
@@ -291,16 +296,88 @@ impl<T: UIBackend> UserInterface<T> {
         Ok(())
     }
 
+    /// Event loop to for placing guard positions
+    pub fn place_guards(&mut self, game: &mut Game) -> Result<()> {
+        let mut remaining: usize = game.config.num_guards;
+        self.guard = 0;
+        let mut final_choice = vec![];
+
+        // Hide player positions
+        let players = game.positions.clone();
+        game.positions = vec![None; game.config.players];
+
+        self.display(game, true)?;
+        while remaining > 0 {
+            self.message(&format!("{} guards remaining to place", remaining))?;
+
+            if let Some(k) = self
+                .backend
+                .input(Duration::from_millis(game.config.input_timeout))?
+            {
+                let mut done = false;
+                let _ = self.defender(game, k, &mut done);
+                if done {
+                    final_choice.push(game.guards[self.guard]);
+                    game.guards[self.guard] = None;
+                    remaining -= 1;
+                    self.guard = game.guards.iter().position(|&x| x.is_some()).unwrap_or(0);
+                }
+            } else {
+                continue;
+            }
+
+            self.display(game, true)?;
+        }
+        game.guards = final_choice;
+        game.positions = players;
+
+        Ok(())
+    }
+
+    /// Splash screen
+    pub fn splash(&mut self) -> Result<()> {
+        const SPLASH: &str = "██   ██  █████  ███    ██ ███████  ██████
+██   ██ ██   ██ ████   ██    ███  ██    ██
+███████ ███████ ██ ██  ██   ███   ██    ██
+██   ██ ██   ██ ██  ██ ██  ███    ██    ██
+██   ██ ██   ██ ██   ████ ███████  ██████
+
+Version: 0.1.0
+";
+
+        self.backend.clear()?;
+        let mut p = (5, 5);
+        for line in SPLASH.lines() {
+            self.backend.draw(p, line, Colour::Red)?;
+            p.1 += 1;
+        }
+        self.backend.flush()?;
+        Ok(())
+    }
+
     /// De-initialise the user interface
     pub fn reset(&mut self) {
         self.backend.reset();
     }
 
     /// Idle screen
-    pub fn idle(&mut self) -> Result<()> {
+    pub fn idle(&mut self, begun: bool) -> Result<bool> {
         // Consume accidental input
-        let _ = self.backend.input(Duration::from_millis(100))?;
-        self.message("Waiting for other players...")
+        if let Some(Key::Char('q')) = self.backend.input(Duration::from_millis(100))? {
+            return Ok(true);
+        }
+        if begun {
+            // Draw @s at random points on the screen
+            let mut rng = thread_rng();
+            let size = self.backend.size();
+            for _ in 0..(size.0 / 3) {
+                let x = rng.gen_range(0..size.0);
+                let y = rng.gen_range(0..(size.1 - 1));
+                self.backend.draw((x, y), "@", Colour::Grey)?;
+            }
+        }
+        self.message("Waiting for other players...")?;
+        Ok(false)
     }
 }
 

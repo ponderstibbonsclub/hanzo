@@ -116,5 +116,6 @@ impl UIBackend for Terminal {
     fn reset(&mut self) {
         execute!(self.stdout, MoveTo(0, self.size.1 - 1), Show).ok();
         terminal::disable_raw_mode().ok();
+        println!();
     }
 }

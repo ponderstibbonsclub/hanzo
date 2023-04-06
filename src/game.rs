@@ -1,7 +1,7 @@
 use crate::{defaults, Cli, Config, MsgToClient, MsgToServer, Result, UIBackend, UserInterface};
 use rand::{
     distributions::{Distribution, Standard},
-    random, Rng,
+    random, thread_rng, Rng,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -260,11 +260,16 @@ impl Game {
         let config = Config::new();
         let player = 0;
 
-        let defender = defaults::DEFENDER;
+        // Currently use test defaults
         let map = defaults::MAP.into();
-        let positions = defaults::POSITIONS.to_vec();
+        let mut positions = defaults::POSITIONS.to_vec();
+        let mut targets = defaults::TARGETS.to_vec();
         let guards = defaults::GUARDS.to_vec();
-        let targets = defaults::TARGETS.to_vec();
+
+        let mut rng = thread_rng();
+        let defender = rng.gen_range(0..config.players);
+        positions[defender] = None;
+        targets[defender] = None;
 
         Game {
             address,
@@ -355,6 +360,16 @@ impl Game {
         ui: &mut UserInterface<T>,
     ) -> Result<MsgToServer> {
         ui.input(self, defender)?;
+        Ok(MsgToServer {
+            new: self.positions[self.player],
+            guards: self.guards.clone(),
+            quit: self.quit,
+        })
+    }
+
+    /// Guard placement for defending player
+    pub fn place_guards<T: UIBackend>(&mut self, ui: &mut UserInterface<T>) -> Result<MsgToServer> {
+        ui.place_guards(self)?;
         Ok(MsgToServer {
             new: self.positions[self.player],
             guards: self.guards.clone(),

@@ -47,6 +47,13 @@ impl ClientThread {
         // Send initial game state
         serialize_into(&self.stream, &game)?;
 
+        if game.player == game.defender {
+            // If this is the defender we wait to receive
+            // their choice of guard positions
+            let msg = deserialize_from(&self.stream)?;
+            self.tx.send(msg)?;
+        }
+
         loop {
             // Send latest info to client
             let msg = self.rx.recv()?;
@@ -102,7 +109,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(game: Game) -> Result<Self> {
+    pub fn new(mut game: Game) -> Result<Self> {
         info!(
             "Address: {}, players: {}",
             game.address, game.config.players
@@ -115,6 +122,11 @@ impl Server {
             g.player = i;
             clients.push(ClientHandle::new(&listener, g)?);
         }
+
+        // Update guards' positions from defending player
+        let msg = clients[game.defender].rx.recv()?;
+        info!("Received guard positions from defender!");
+        game.update(msg, game.defender);
 
         Ok(Server { clients, game })
     }
@@ -160,17 +172,28 @@ pub struct Client<T: UIBackend> {
 }
 
 impl<T: UIBackend> Client<T> {
-    pub fn new(address: &str, ui: UserInterface<T>) -> Result<Self> {
+    pub fn new(address: &str, mut ui: UserInterface<T>) -> Result<Self> {
         let stream = TcpStream::connect(address)?;
-        stream.set_read_timeout(Some(Duration::from_millis(100)))?;
-        let game = deserialize_from(&stream)?;
+        let mut game: Game = deserialize_from(&stream)?;
         info!("Connected to {}. Waiting for server...", address);
+
+        // Defender sets positions of their guards
+        if game.player == game.defender {
+            let msg = game.place_guards(&mut ui)?;
+            serialize_into(&stream, &msg)?;
+        }
+
+        // Display splash screen
+        ui.splash()?;
 
         Ok(Client { stream, game, ui })
     }
 
     pub fn run(&mut self) -> Result<()> {
+        self.stream
+            .set_read_timeout(Some(Duration::from_millis(100)))?;
         let quit: Status;
+        let mut begun = false;
         loop {
             // Receive update from server
             if let Ok(msg) = deserialize_from::<&TcpStream, MsgToClient>(&self.stream) {
@@ -179,14 +202,16 @@ impl<T: UIBackend> Client<T> {
                     quit = msg.quit;
                     break;
                 }
+                begun = true;
 
                 // Send back update if it's our turn
                 if msg.turn {
                     let msg = self.game.play(msg.defender, &mut self.ui)?;
                     serialize_into(&self.stream, &msg)?;
                 }
-            } else {
-                self.ui.idle()?;
+            } else if self.ui.idle(begun)? {
+                self.ui.reset();
+                return Ok(());
             }
         }
         self.ui.reset();
