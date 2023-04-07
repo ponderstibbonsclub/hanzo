@@ -446,8 +446,8 @@ impl<T: UIBackend> UserInterface<T> {
 ██   ██ ██   ██ ██  ██ ██  ███    ██    ██
 ██   ██ ██   ██ ██   ████ ███████  ██████
 
-Version: 0.1.0
 ";
+        const VERSION: &str = env!("CARGO_PKG_VERSION");
 
         self.backend.clear()?;
         let mut p = (5, 5);
@@ -455,6 +455,7 @@ Version: 0.1.0
             self.backend.draw(p, line, Colour::Red, Colour::Reset)?;
             p.1 += 1;
         }
+        self.backend.draw(p, VERSION, Colour::Blue, Colour::Reset)?;
         self.backend.flush()?;
         Ok(())
     }
